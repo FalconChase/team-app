@@ -1,0 +1,311 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME SYSTEM — 6 Fully Immersive Color Palettes
+   Active theme is set via data-theme on <html> or <body>.
+   Every surface uses CSS variables — no hardcoded colors anywhere.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── DEFAULT — Professional Blue ─────────────────────────────────────────── */
+:root,
+[data-theme="default"] {
+  /* Primary */
+  --primary: #1a3a5c;
+  --primary-hover: #2d4f73;
+  --primary-light: #e6f1fb;
+  --primary-border: #b8d4f0;
+
+  /* Accent */
+  --accent: #185fa5;
+  --accent-bg: #ddeeff;
+  --accent-border: #b8d4f0;
+
+  /* Status */
+  --success: #1a8a3a;
+  --success-bg: #d4edda;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --danger: #c0392b;
+  --danger-bg: #fcebeb;
+  --info: #2563eb;
+  --info-bg: #dbeafe;
+
+  /* Backgrounds — full viewport immersion */
+  --bg-page: #f4f6f9;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #f0f5fa;
+  --bg-secondary: #eaf1f8;
+
+  /* Text */
+  --text-primary: #1a3a5c;
+  --text-secondary: #5a7a9a;
+  --text-muted: #888888;
+  --text-disabled: #aaaaaa;
+
+  /* Borders */
+  --border-main: #d8e6f2;
+  --border-light: #eaf1f8;
+  --border-input: #c8daea;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.15);
+
+  /* Font */
+  --font-family: Tahoma, Geneva, sans-serif;
+}
+
+/* ─── FOREST — Full Earthy Green Immersion ─────────────────────────────────── */
+[data-theme="forest"] {
+  --primary: #2d5016;
+  --primary-hover: #3d6820;
+  --primary-light: #c8e6c9;
+  --primary-border: #81c784;
+
+  --accent: #388e3c;
+  --accent-bg: #a5d6a7;
+  --accent-border: #66bb6a;
+
+  --success: #1b5e20;
+  --success-bg: #c8e6c9;
+  --warning: #f57c00;
+  --warning-bg: #ffe0b2;
+  --danger: #c62828;
+  --danger-bg: #ffcdd2;
+  --info: #0277bd;
+  --info-bg: #b3e5fc;
+
+  /* No white — entire viewport is green-tinted */
+  --bg-page: #d6eeda;
+  --bg-card: #e6f5e8;
+  --bg-input: #eff9f0;
+  --bg-hover: #c4e8c8;
+  --bg-secondary: #cce8d0;
+
+  --text-primary: #1b3a1a;
+  --text-secondary: #2e5e2c;
+  --text-muted: #4a7848;
+  --text-disabled: #8ab888;
+
+  --border-main: #9cca9e;
+  --border-light: #c4e8c8;
+  --border-input: #76bb79;
+
+  --shadow-sm: 0 1px 3px rgba(29, 78, 29, 0.15);
+  --shadow-md: 0 4px 12px rgba(29, 78, 29, 0.18);
+  --shadow-lg: 0 12px 28px rgba(29, 78, 29, 0.22);
+
+  --font-family: Tahoma, Geneva, sans-serif;
+}
+
+/* ─── SUNSET — Full Warm Amber Immersion ────────────────────────────────────── */
+[data-theme="sunset"] {
+  --primary: #7c2d12;
+  --primary-hover: #9a3412;
+  --primary-light: #fed7aa;
+  --primary-border: #fb923c;
+
+  --accent: #ea580c;
+  --accent-bg: #fdba74;
+  --accent-border: #f97316;
+
+  --success: #15803d;
+  --success-bg: #d1fae5;
+  --warning: #ca8a04;
+  --warning-bg: #fef9c3;
+  --danger: #be123c;
+  --danger-bg: #ffe4e6;
+  --info: #7c3aed;
+  --info-bg: #ede9fe;
+
+  /* No white — entire viewport is warm amber/peach */
+  --bg-page: #fce0bc;
+  --bg-card: #fdefd8;
+  --bg-input: #fef5ea;
+  --bg-hover: #f9d09a;
+  --bg-secondary: #fbd3a0;
+
+  --text-primary: #6b1f08;
+  --text-secondary: #9a3412;
+  --text-muted: #b45309;
+  --text-disabled: #f9b577;
+
+  --border-main: #f5a96a;
+  --border-light: #fad0a0;
+  --border-input: #f09050;
+
+  --shadow-sm: 0 1px 3px rgba(124, 45, 18, 0.15);
+  --shadow-md: 0 4px 12px rgba(234, 88, 12, 0.18);
+  --shadow-lg: 0 12px 28px rgba(234, 88, 12, 0.22);
+
+  --font-family: Tahoma, Geneva, sans-serif;
+}
+
+/* ─── MIDNIGHT — Full Dark Mode (eye-comfort blues) ─────────────────────────── */
+[data-theme="midnight"] {
+  /* Inverted: light values become the interactive/primary elements */
+  --primary: #90c4f0;
+  --primary-hover: #b8d9f8;
+  --primary-light: #1a3050;
+  --primary-border: #3a6090;
+
+  --accent: #38bdf8;
+  --accent-bg: #0a2a40;
+  --accent-border: #0284c7;
+
+  --success: #34d399;
+  --success-bg: #042e20;
+  --warning: #fbbf24;
+  --warning-bg: #3a1a00;
+  --danger: #f87171;
+  --danger-bg: #3a0808;
+  --info: #67e8f9;
+  --info-bg: #062030;
+
+  /* Deep blue-gray — not black, not white. Scientifically easy on the eyes. */
+  --bg-page: #0d1520;
+  --bg-card: #152030;
+  --bg-input: #1c2d42;
+  --bg-hover: #233450;
+  --bg-secondary: #182840;
+
+  --text-primary: #deeaf8;
+  --text-secondary: #90b4d4;
+  --text-muted: #607a94;
+  --text-disabled: #3a5068;
+
+  --border-main: #223448;
+  --border-light: #1c2d42;
+  --border-input: #2c4060;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.65);
+
+  --font-family: Tahoma, Geneva, sans-serif;
+}
+
+/* ─── MONOCHROME — Brutalist Grayscale ──────────────────────────────────────── */
+[data-theme="monochrome"] {
+  --primary: #111111;
+  --primary-hover: #333333;
+  --primary-light: #e8e8e8;
+  --primary-border: #999999;
+
+  --accent: #222222;
+  --accent-bg: #eeeeee;
+  --accent-border: #bbbbbb;
+
+  /* Status in grayscale only */
+  --success: #3a3a3a;
+  --success-bg: #e8e8e8;
+  --warning: #606060;
+  --warning-bg: #f0f0f0;
+  --danger: #111111;
+  --danger-bg: #dddddd;
+  --info: #333333;
+  --info-bg: #e8e8e8;
+
+  /* Clean white/gray — intentional minimalism */
+  --bg-page: #efefef;
+  --bg-card: #fafafa;
+  --bg-input: #ffffff;
+  --bg-hover: #e2e2e2;
+  --bg-secondary: #e8e8e8;
+
+  --text-primary: #111111;
+  --text-secondary: #444444;
+  --text-muted: #777777;
+  --text-disabled: #aaaaaa;
+
+  --border-main: #cccccc;
+  --border-light: #e2e2e2;
+  --border-input: #bbbbbb;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.15);
+
+  --font-family: Tahoma, Geneva, sans-serif;
+}
+
+/* ─── ARCADE — Full Retro Game Immersion 🎮 ─────────────────────────────────── */
+[data-theme="arcade"] {
+  /* Neon green as primary — classic terminal/game HUD color */
+  --primary: #00ff88;
+  --primary-hover: #44ffaa;
+  --primary-light: #003322;
+  --primary-border: #00bb66;
+
+  --accent: #ff2d78;
+  --accent-bg: #2a0010;
+  --accent-border: #cc1155;
+
+  --success: #00ff88;
+  --success-bg: #001f10;
+  --warning: #ffdd00;
+  --warning-bg: #2a1e00;
+  --danger: #ff2d78;
+  --danger-bg: #2a0010;
+  --info: #00eeff;
+  --info-bg: #001a22;
+
+  /* Deep dark purple — like looking at a CRT game screen */
+  --bg-page: #07001a;
+  --bg-card: #0f0030;
+  --bg-input: #170045;
+  --bg-hover: #1e0055;
+  --bg-secondary: #120038;
+
+  --text-primary: #e0d0ff;
+  --text-secondary: #b090e0;
+  --text-muted: #7050a0;
+  --text-disabled: #3d1f60;
+
+  --border-main: #38008a;
+  --border-light: #220055;
+  --border-input: #4800b0;
+
+  /* Neon glow shadows — signature retro game feel */
+  --shadow-sm: 0 0 6px rgba(0, 255, 136, 0.25);
+  --shadow-md: 0 0 16px rgba(0, 255, 136, 0.2), 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 0 30px rgba(255, 45, 120, 0.3), 0 12px 28px rgba(0, 0, 0, 0.7);
+
+  --font-family: 'Press Start 2P', monospace;
+}
+
+/* Arcade-wide font & layout tweaks */
+[data-theme="arcade"] {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  line-height: 2;
+  letter-spacing: 0.03em;
+}
+
+[data-theme="arcade"] h1,
+[data-theme="arcade"] h2,
+[data-theme="arcade"] h3,
+[data-theme="arcade"] h4 {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+[data-theme="arcade"] input,
+[data-theme="arcade"] select,
+[data-theme="arcade"] textarea {
+  caret-color: #00ff88;
+}
+
+[data-theme="arcade"] button,
+[data-theme="arcade"] .stat,
+[data-theme="arcade"] .reminder-card {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+[data-theme="arcade"] button:active {
+  transform: scale(0.95);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   END OF THEME VARIABLES
+   ═══════════════════════════════════════════════════════════════════════════ */

@@ -1,0 +1,35 @@
+@import './theme-variables.css';
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Tahoma', Geneva, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-input);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+a { text-decoration: none; }
+
+/* ─── Stat cards hover effect (for Dashboard) ───────────────────────────── */
+.stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ─── Reminder card hover effect ─────────────────────────────────────────── */
+.reminder-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-border);
+}

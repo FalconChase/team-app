@@ -33,3 +33,4 @@ a { text-decoration: none; }
   box-shadow: var(--shadow-md);
   border-color: var(--primary-border);
 }
+@media print { .no-print { display: none !important; } }

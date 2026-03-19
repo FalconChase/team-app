@@ -513,6 +513,12 @@ export default function Documents() {
   const getStage  = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
   const toggleRow = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  // ─── Shared activity fields written on every update ──────────────────────
+  const activityFields = () => ({
+    lastUpdatedAt: serverTimestamp(),
+    lastUpdatedBy: userProfile.displayName || "Unknown",
+  });
+
   async function saveDocument() {
     const { projectId, subjectType, subjectNum, rpdmRef, status } = form;
     if (!projectId) { alert("Please select a project."); return; }
@@ -524,7 +530,11 @@ export default function Documents() {
       dotsDate: form.dotsDate || null, dotsTrackingId: form.dotsTrackingId || null,
       assignedTo: form.assignedTo || null,
       statusDetails: { LACKING: { items: defaultItems, customItems: [] }, ...dotsDetails },
-      createdAt: serverTimestamp(), lastUpdatedAt: serverTimestamp(), createdBy: userProfile.uid,
+      createdAt: serverTimestamp(),
+      createdBy: userProfile.uid,
+      createdByName: userProfile.displayName || "Unknown",  // ← NEW: display name for "recently added by"
+      lastUpdatedAt: serverTimestamp(),
+      lastUpdatedBy: userProfile.displayName || "Unknown",  // ← NEW: same person on creation
       activityLog: [{ text: `Document created by ${userProfile.displayName}`, by: userProfile.displayName, at: new Date().toISOString() }],
     });
     setShowForm(false);
@@ -533,7 +543,8 @@ export default function Documents() {
 
   async function handleStatusChange(docId, newStatus) {
     await updateDoc(doc(db, "papers", docId), {
-      status: newStatus, lastUpdatedAt: serverTimestamp(),
+      status: newStatus,
+      ...activityFields(),  // ← NEW: writes lastUpdatedAt + lastUpdatedBy
       activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }
@@ -541,7 +552,8 @@ export default function Documents() {
   async function handleSaveDetails(docId, statusLabel, details) {
     const key = toKey(statusLabel);
     await updateDoc(doc(db, "papers", docId), {
-      [`statusDetails.${key}`]: details, lastUpdatedAt: serverTimestamp(),
+      [`statusDetails.${key}`]: details,
+      ...activityFields(),  // ← NEW
       activityLog: arrayUnion({ text: `Details updated for "${statusLabel}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }
@@ -550,14 +562,20 @@ export default function Documents() {
     const field    = isCustom ? "customItems" : "items";
     const existing = currentDoc.statusDetails?.LACKING || { items: [], customItems: [] };
     const updated  = { ...existing, [field]: existing[field].map((it) => it.id === itemId ? { ...it, checked: !it.checked } : it) };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, lastUpdatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...activityFields(),  // ← NEW
+    });
   }
 
   async function handleRemoveLackingItem(docId, itemId, isCustom, currentDoc) {
     const field    = isCustom ? "customItems" : "items";
     const existing = currentDoc.statusDetails?.LACKING || { items: [], customItems: [] };
     const updated  = { ...existing, [field]: existing[field].filter((it) => it.id !== itemId) };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, lastUpdatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...activityFields(),  // ← NEW
+    });
   }
 
   async function handleClearCompleted(docId, currentDoc) {
@@ -566,18 +584,25 @@ export default function Documents() {
       items:       existing.items.filter((it) => !it.checked),
       customItems: existing.customItems.filter((it) => !it.checked),
     };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, lastUpdatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...activityFields(),  // ← NEW
+    });
   }
 
   async function handleAddCustomItem(docId, label, currentDoc) {
     const existing = currentDoc.statusDetails?.LACKING || { items: [], customItems: [] };
     const updated  = { ...existing, customItems: [...(existing.customItems || []), { id: `custom_${Date.now()}`, label, checked: false }] };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, lastUpdatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...activityFields(),  // ← NEW
+    });
   }
 
   async function handleAssignMember(docId, uid) {
     await updateDoc(doc(db, "papers", docId), {
-      assignedTo: uid || null, lastUpdatedAt: serverTimestamp(),
+      assignedTo: uid || null,
+      ...activityFields(),  // ← NEW
       activityLog: arrayUnion({ text: uid ? `Assigned to ${members.find((m) => (m.uid || m.id) === uid)?.displayName || uid}` : "Unassigned", by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }

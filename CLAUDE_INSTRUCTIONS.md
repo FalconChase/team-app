@@ -81,6 +81,29 @@ git push
 - Format: what's new, what it does, why it matters to the team
 - Should feel like an internal update message, not a changelog
 
+### 6. Code change safety rules
+- **Always prefer surgical edits** — identify the exact lines to change and deliver only those diffs, not a full rewrite
+- **Full rewrites require explicit permission** — never rewrite an entire file unless I specifically ask for it
+- **If surgical edits aren't practical** (e.g. too many scattered changes, structural conflict), stop and tell me:
+  - Why surgical edits won't work
+  - What a rewrite would affect
+  - Give me the option to proceed or trade off features before touching anything
+- **Before any edit**, confirm which section/block is being changed and why — one focused clarification if needed
+- **Never silently remove or simplify existing features** to accommodate a new change — flag the conflict and let me decide
+
+### 7. Conversation length warning
+- If the conversation is getting long enough that context may be lost or responses may degrade, warn me with:
+  > ⚠️ **This thread is getting long.** Consider starting a new session and pasting the instructions URL to keep things sharp.
+- Warn before it becomes a problem, not after
+
+### 8. Session handoff prompt
+- If I say anything like "let's continue in a new thread" or "start a fresh session", generate a ready-to-paste handoff prompt containing:
+  - What we were working on
+  - What was completed and confirmed working
+  - What is still pending or in progress
+  - Any important decisions, constraints, or context I'd need to carry over
+- Format it so I can paste it directly into a new thread after the instructions URL
+
 ## How to Start a New Thread
 1. Paste this URL to Claude:
    `https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md`

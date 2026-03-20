@@ -828,7 +828,7 @@ export default function Dashboard() {
 
   const handleBrowserPrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `Dashboard Report — ${new Date().toLocaleDateString("en-PH")}`,
+    documentTitle: `DOCUMENT STATUS REPORT — ${new Date().toLocaleDateString("en-PH")}`,
     pageStyle: `@page { size: A4 portrait; margin: 12mm 14mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } [data-pdf-card] { page-break-inside: avoid !important; break-inside: avoid !important; }`,
     onAfterPrint: () => setShowPrintModal(false),
   });
@@ -996,7 +996,7 @@ export default function Dashboard() {
           <div data-pdf-header style={{ padding: "28px 32px 0" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2.5px solid #1a3a5c", paddingBottom: "12px", marginBottom: "18px" }}>
               <div>
-                <div style={{ fontSize: "22px", fontWeight: "700", color: "#1a3a5c" }}>Dashboard Report</div>
+                <div style={{ fontSize: "22px", fontWeight: "700", color: "#1a3a5c" }}>DOCUMENT STATUS REPORT</div>
                 {team?.name && <div style={{ fontSize: "12px", color: "#5a7a9a", marginTop: "2px" }}>{team.name}</div>}
                 {activeFilterBadges.length > 0 && (
                   <div style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}>

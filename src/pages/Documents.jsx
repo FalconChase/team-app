@@ -513,11 +513,14 @@ export default function Documents() {
   const getStage  = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
   const toggleRow = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  // ─── Shared activity fields written on every update ──────────────────────
-  const activityFields = () => ({
-    lastUpdatedAt: serverTimestamp(),
-    lastUpdatedBy: userProfile.displayName || "Unknown",
-  });
+  // ─── Helper: shared modifier fields written on every update ────────────────
+  // This is the ONLY place we define what "a modification" means for tracking.
+  function modifierFields() {
+    return {
+      lastModifiedAt: serverTimestamp(),
+      lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
+    };
+  }
 
   async function saveDocument() {
     const { projectId, subjectType, subjectNum, rpdmRef, status } = form;
@@ -531,10 +534,10 @@ export default function Documents() {
       assignedTo: form.assignedTo || null,
       statusDetails: { LACKING: { items: defaultItems, customItems: [] }, ...dotsDetails },
       createdAt: serverTimestamp(),
-      createdBy: userProfile.uid,
-      createdByName: userProfile.displayName || "Unknown",  // ← NEW: display name for "recently added by"
-      lastUpdatedAt: serverTimestamp(),
-      lastUpdatedBy: userProfile.displayName || "Unknown",  // ← NEW: same person on creation
+      createdBy: userProfile.displayName || userProfile.email || "Unknown",
+      // On creation, lastModified mirrors creation so sorting works immediately
+      lastModifiedAt: serverTimestamp(),
+      lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
       activityLog: [{ text: `Document created by ${userProfile.displayName}`, by: userProfile.displayName, at: new Date().toISOString() }],
     });
     setShowForm(false);
@@ -544,7 +547,7 @@ export default function Documents() {
   async function handleStatusChange(docId, newStatus) {
     await updateDoc(doc(db, "papers", docId), {
       status: newStatus,
-      ...activityFields(),  // ← NEW: writes lastUpdatedAt + lastUpdatedBy
+      ...modifierFields(),
       activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }
@@ -553,7 +556,7 @@ export default function Documents() {
     const key = toKey(statusLabel);
     await updateDoc(doc(db, "papers", docId), {
       [`statusDetails.${key}`]: details,
-      ...activityFields(),  // ← NEW
+      ...modifierFields(),
       activityLog: arrayUnion({ text: `Details updated for "${statusLabel}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }
@@ -564,7 +567,7 @@ export default function Documents() {
     const updated  = { ...existing, [field]: existing[field].map((it) => it.id === itemId ? { ...it, checked: !it.checked } : it) };
     await updateDoc(doc(db, "papers", docId), {
       "statusDetails.LACKING": updated,
-      ...activityFields(),  // ← NEW
+      ...modifierFields(),
     });
   }
 
@@ -574,7 +577,7 @@ export default function Documents() {
     const updated  = { ...existing, [field]: existing[field].filter((it) => it.id !== itemId) };
     await updateDoc(doc(db, "papers", docId), {
       "statusDetails.LACKING": updated,
-      ...activityFields(),  // ← NEW
+      ...modifierFields(),
     });
   }
 
@@ -586,7 +589,7 @@ export default function Documents() {
     };
     await updateDoc(doc(db, "papers", docId), {
       "statusDetails.LACKING": updated,
-      ...activityFields(),  // ← NEW
+      ...modifierFields(),
     });
   }
 
@@ -595,14 +598,14 @@ export default function Documents() {
     const updated  = { ...existing, customItems: [...(existing.customItems || []), { id: `custom_${Date.now()}`, label, checked: false }] };
     await updateDoc(doc(db, "papers", docId), {
       "statusDetails.LACKING": updated,
-      ...activityFields(),  // ← NEW
+      ...modifierFields(),
     });
   }
 
   async function handleAssignMember(docId, uid) {
     await updateDoc(doc(db, "papers", docId), {
       assignedTo: uid || null,
-      ...activityFields(),  // ← NEW
+      ...modifierFields(),
       activityLog: arrayUnion({ text: uid ? `Assigned to ${members.find((m) => (m.uid || m.id) === uid)?.displayName || uid}` : "Unassigned", by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }

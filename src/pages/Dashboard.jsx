@@ -125,6 +125,59 @@ function getRemarksText(doc) {
   return null;
 }
 
+// ─── Smart relative timestamp label ──────────────────────────────────────────
+// Returns an object: { label, isNew } where isNew = true if this was a fresh addDoc
+function getActivityLabel(d) {
+  // Prefer lastModifiedAt; fall back to createdAt; fall back to lastUpdatedAt (legacy field name)
+  const modTs  = d.lastModifiedAt?.toDate?.() || null;
+  const crtTs  = d.createdAt?.toDate?.()      || null;
+  const legTs  = d.lastUpdatedAt?.toDate?.()  || null; // backwards compat for existing docs
+
+  // Determine if this document was just newly added (no modifier yet means it was never edited after creation)
+  // We treat it as "new" if lastModifiedBy equals createdBy AND the timestamps are within 5 seconds of each other
+  // OR if there's no lastModifiedBy but there is a createdBy (legacy doc not yet touched)
+  const effectiveTs = modTs || legTs || crtTs;
+  if (!effectiveTs) return null;
+
+  const by     = d.lastModifiedBy || null;
+  const crtBy  = d.createdBy      || null;
+
+  // Determine label type: "Added" vs "Updated"
+  // A doc is "Added" if it has never been modified after creation.
+  // We detect this by checking if lastModifiedBy is absent (old docs) or if
+  // lastModifiedBy === createdBy AND |lastModifiedAt - createdAt| < 10 seconds
+  let isNew = false;
+  if (!by && crtBy) {
+    isNew = true; // old doc, never had a modifier written — treat as "Added"
+  } else if (by && crtBy && by === crtBy && modTs && crtTs) {
+    const diffMs = Math.abs(modTs.getTime() - crtTs.getTime());
+    isNew = diffMs < 10000; // within 10s means it's the creation write
+  }
+
+  const now      = new Date();
+  const todayStr = now.toDateString();
+  const yesterdayStr = new Date(now - 86400000).toDateString();
+  const tsStr    = effectiveTs.toDateString();
+
+  const actor = by || crtBy || null;
+
+  let timeLabel;
+  if (tsStr === todayStr) {
+    // Show time for today
+    const time = effectiveTs.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", hour12: true });
+    timeLabel = `today at ${time}`;
+  } else if (tsStr === yesterdayStr) {
+    timeLabel = "yesterday";
+  } else {
+    timeLabel = effectiveTs.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  const verb = isNew ? "Added" : "Updated";
+  const label = actor ? `${verb} ${timeLabel} by ${actor}` : `${verb} ${timeLabel}`;
+
+  return { label, isNew, ts: effectiveTs };
+}
+
 // ─── Status Hover Card — fully theme-aware ────────────────────────────────────
 function StatusHoverCard({ content, onUpdateStatus, onMouseEnter, onMouseLeave }) {
   const [btnHover, setBtnHover] = useState(false);
@@ -587,7 +640,7 @@ function PersonalReminders({ uid }) {
 }
 
 // ─── Print Modal ──────────────────────────────────────────────────────────────
-function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setIncludeRemarks, filteredCount, isExporting }) {
+function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setIncludeRemarks, includeLastUpdated, setIncludeLastUpdated, filteredCount, isExporting }) {
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(10,24,40,0.55)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -601,9 +654,11 @@ function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setI
         <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "22px" }}>
           Printing <strong style={{ color: "var(--text-primary)" }}>{filteredCount}</strong> document{filteredCount !== 1 ? "s" : ""} based on your current filters and sort.
         </div>
+
+        {/* Include Remarks toggle */}
         <div
           onClick={() => setIncludeRemarks(!includeRemarks)}
-          style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "14px", borderRadius: "10px", cursor: "pointer", border: `1.5px solid ${includeRemarks ? "var(--primary)" : "var(--border-main)"}`, background: includeRemarks ? "var(--primary-light)" : "var(--bg-hover)", marginBottom: "20px", transition: "all 0.15s ease" }}
+          style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "14px", borderRadius: "10px", cursor: "pointer", border: `1.5px solid ${includeRemarks ? "var(--primary)" : "var(--border-main)"}`, background: includeRemarks ? "var(--primary-light)" : "var(--bg-hover)", marginBottom: "10px", transition: "all 0.15s ease" }}
         >
           <div style={{ width: "18px", height: "18px", borderRadius: "4px", flexShrink: 0, marginTop: "1px", border: `2px solid ${includeRemarks ? "var(--primary)" : "var(--border-input)"}`, background: includeRemarks ? "var(--primary)" : "var(--bg-card)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s ease" }}>
             {includeRemarks && <span style={{ color: "#fff", fontSize: "11px", fontWeight: "700" }}>✓</span>}
@@ -613,6 +668,21 @@ function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setI
             <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "3px", lineHeight: "1.4" }}>Prints each document as a card with Project ID, Status, Subject, and all remarks/notes.</div>
           </div>
         </div>
+
+        {/* Include Last Updated By toggle */}
+        <div
+          onClick={() => setIncludeLastUpdated(!includeLastUpdated)}
+          style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "14px", borderRadius: "10px", cursor: "pointer", border: `1.5px solid ${includeLastUpdated ? "var(--primary)" : "var(--border-main)"}`, background: includeLastUpdated ? "var(--primary-light)" : "var(--bg-hover)", marginBottom: "20px", transition: "all 0.15s ease" }}
+        >
+          <div style={{ width: "18px", height: "18px", borderRadius: "4px", flexShrink: 0, marginTop: "1px", border: `2px solid ${includeLastUpdated ? "var(--primary)" : "var(--border-input)"}`, background: includeLastUpdated ? "var(--primary)" : "var(--bg-card)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s ease" }}>
+            {includeLastUpdated && <span style={{ color: "#fff", fontSize: "11px", fontWeight: "700" }}>✓</span>}
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)" }}>Show Last Updated By</div>
+            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "3px", lineHeight: "1.4" }}>Includes who last updated each document and when.</div>
+          </div>
+        </div>
+
         {includeRemarks && (
           <div style={{ background: "var(--info-bg)", border: "1px dashed var(--border-main)", borderRadius: "8px", padding: "10px 12px", marginBottom: "18px", fontSize: "11px", color: "var(--text-secondary)" }}>
             <div style={{ fontWeight: "700", marginBottom: "4px", color: "var(--text-primary)" }}>Preview format per document:</div>
@@ -620,8 +690,10 @@ function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setI
             <div>📋 <strong>Status:</strong> PRECOMPILING</div>
             <div>📄 <strong>Subject:</strong> 6th RPDM due to CTE#5</div>
             <div>📝 <strong>Remarks:</strong> (all notes / lacking items / details)</div>
+            {includeLastUpdated && <div>🕒 <strong>Last Updated:</strong> Updated today at 2:30 PM by Juan</div>}
           </div>
         )}
+
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <button onClick={onBrowserPrint} style={{ padding: "11px", borderRadius: "8px", border: "none", background: "var(--primary)", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px" }}
             onMouseEnter={(e) => e.currentTarget.style.opacity = "0.88"} onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}>
@@ -656,10 +728,11 @@ export default function Dashboard() {
   const [filterMember, setFilterMember] = useState("All");
   const [sortOrder,    setSortOrder]    = useState("none");
 
-  const [tooltip,        setTooltip]        = useState(null);
-  const [showPrintModal, setShowPrintModal] = useState(false);
-  const [includeRemarks, setIncludeRemarks] = useState(false);
-  const [isExporting,    setIsExporting]    = useState(false);
+  const [tooltip,           setTooltip]           = useState(null);
+  const [showPrintModal,    setShowPrintModal]    = useState(false);
+  const [includeRemarks,    setIncludeRemarks]    = useState(false);
+  const [includeLastUpdated, setIncludeLastUpdated] = useState(false);
+  const [isExporting,       setIsExporting]       = useState(false);
 
   const hideTimerRef = useRef(null);
   const printRef     = useRef(null);
@@ -704,21 +777,29 @@ export default function Dashboard() {
   const assignedMemberIds = [...new Set(documents.map((d) => d.assignedTo).filter(Boolean))];
   const assignedMembers   = (members || []).filter((m) => assignedMemberIds.includes(m.uid || m.id));
 
+  // ─── Sorting logic ──────────────────────────────────────────────────────────
+  // Default (sortOrder === "none") = most recently modified first.
+  // A→Z / Z→A = sort by project ID label, same as before.
   const filtered = documents
     .filter((d) =>
       (filterStatus === "All" || d.status    === filterStatus) &&
-      (filterProj   === "All" || d.projectId === d.projectId)  &&
       (filterMember === "All" || d.assignedTo === filterMember)
     )
     .filter((d) => filterProj === "All" || d.projectId === filterProj)
     .sort((a, b) => {
-      if (sortOrder === "none") return 0;
-      const pA = projects.find((p) => p.id === a.projectId);
-      const pB = projects.find((p) => p.id === b.projectId);
-      const lA = (pA?.projectId || a.projectId || "").toUpperCase();
-      const lB = (pB?.projectId || b.projectId || "").toUpperCase();
-      const c  = lA.localeCompare(lB, undefined, { numeric: true, sensitivity: "base" });
-      return sortOrder === "asc" ? c : -c;
+      if (sortOrder === "asc" || sortOrder === "desc") {
+        const pA = projects.find((p) => p.id === a.projectId);
+        const pB = projects.find((p) => p.id === b.projectId);
+        const lA = (pA?.projectId || a.projectId || "").toUpperCase();
+        const lB = (pB?.projectId || b.projectId || "").toUpperCase();
+        const c  = lA.localeCompare(lB, undefined, { numeric: true, sensitivity: "base" });
+        return sortOrder === "asc" ? c : -c;
+      }
+      // Default: most recently modified first
+      // Fall back chain: lastModifiedAt → lastUpdatedAt (legacy) → createdAt → 0
+      const tsA = a.lastModifiedAt?.toMillis?.() || a.lastUpdatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+      const tsB = b.lastModifiedAt?.toMillis?.() || b.lastUpdatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+      return tsB - tsA;
     });
 
   const sortedThresholds = [...thresholds].sort((a, b) => Number(a.days) - Number(b.days));
@@ -830,12 +911,14 @@ export default function Dashboard() {
     divider:   { width: "1px", height: "20px", background: "var(--border-main)", margin: "0 2px" },
   };
 
+  // ─── Print card renderer (used in hidden printable area) ──────────────────
   const renderCard = (d, i) => {
     const project     = projects.find((p) => p.id === d.projectId);
     const pidLabel    = project?.projectId || d.projectId || "—";
     const pidColor    = projectIdColor(d, thresholds);
     const assigned    = members?.find((m) => (m.uid || m.id) === d.assignedTo);
     const remarksText = getRemarksText(d);
+    const activity    = getActivityLabel(d);
     return (
       <div key={d.id} data-pdf-card style={{ marginBottom: "12px", border: "1px solid #d0dde8", borderLeft: `4px solid ${pidColor}`, borderRadius: "6px", padding: "12px 16px", pageBreakInside: "avoid", breakInside: "avoid", background: i % 2 === 0 ? "#fff" : "#fafcfe" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
@@ -866,6 +949,12 @@ export default function Dashboard() {
             ? <div style={{ fontSize: "12px", color: "#1a3a5c", lineHeight: "1.5" }}>{remarksText}</div>
             : <div style={{ fontSize: "11px", color: "#bbb", fontStyle: "italic" }}>No remarks.</div>}
         </div>
+        {/* Last updated line — only shown in print if toggle is on */}
+        {includeLastUpdated && activity && (
+          <div style={{ marginTop: "8px", fontSize: "10px", color: "#8a9ab0", fontStyle: "italic", borderTop: "1px dashed #dde6f0", paddingTop: "6px" }}>
+            🕒 {activity.label}
+          </div>
+        )}
       </div>
     );
   };
@@ -888,55 +977,50 @@ export default function Dashboard() {
       )}
 
       {showPrintModal && (
-        <PrintModal onClose={() => setShowPrintModal(false)} onBrowserPrint={handleBrowserPrint} onExportPDF={handleExportPDF} includeRemarks={includeRemarks} setIncludeRemarks={setIncludeRemarks} filteredCount={filtered.length} isExporting={isExporting} />
+        <PrintModal
+          onClose={() => setShowPrintModal(false)}
+          onBrowserPrint={handleBrowserPrint}
+          onExportPDF={handleExportPDF}
+          includeRemarks={includeRemarks}
+          setIncludeRemarks={setIncludeRemarks}
+          includeLastUpdated={includeLastUpdated}
+          setIncludeLastUpdated={setIncludeLastUpdated}
+          filteredCount={filtered.length}
+          isExporting={isExporting}
+        />
       )}
 
-      {/* ── Hidden printable area ── */}
+      {/* Hidden printable area — always white for PDF legibility */}
       <div style={{ position: "absolute", left: "-9999px", top: 0, width: "794px" }}>
         <div ref={printRef} style={{ fontFamily: "Tahoma, Geneva, sans-serif", background: "#fff" }}>
-
-          {/* ── PRINT HEADER ── */}
           <div data-pdf-header style={{ padding: "28px 32px 0" }}>
-            <div style={{ marginBottom: "4px" }}>
-              <div style={{ fontSize: "17px", fontWeight: "700", color: "#1a3a5c", letterSpacing: "0.4px", textTransform: "uppercase" }}>
-                Project Documents &amp; Status Report
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2.5px solid #1a3a5c", paddingBottom: "12px", marginBottom: "18px" }}>
+              <div>
+                <div style={{ fontSize: "22px", fontWeight: "700", color: "#1a3a5c" }}>Dashboard Report</div>
+                {team?.name && <div style={{ fontSize: "12px", color: "#5a7a9a", marginTop: "2px" }}>{team.name}</div>}
+                {activeFilterBadges.length > 0 && (
+                  <div style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {activeFilterBadges.map((f, i) => <span key={i} style={{ fontSize: "10px", background: "#e8eef4", color: "#1a3a5c", padding: "2px 7px", borderRadius: "10px", fontWeight: "600" }}>{f}</span>)}
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: "11px", color: "#5a7a9a", marginTop: "3px" }}>
-                As of {dateStrFull}
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "11px", color: "#888" }}>{dateStrFull}</div>
+                <div style={{ fontSize: "12px", fontWeight: "600", color: "#1a3a5c", marginTop: "4px" }}>{filtered.length} document{filtered.length !== 1 ? "s" : ""}</div>
               </div>
-              {team?.department && (
-                <div style={{ fontSize: "11px", color: "#5a7a9a", marginTop: "2px" }}>{team.department}</div>
-              )}
-              {team?.name && (
-                <div style={{ fontSize: "11px", color: "#5a7a9a", marginTop: "2px" }}>{team.name}</div>
-              )}
             </div>
-            <div style={{ height: "12px" }} />
-            <div style={{ borderBottom: "2px solid #1a3a5c", marginBottom: "12px" }} />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "10px", marginBottom: "12px" }}>
-              {[
-                { label: "Total",       val: total,    color: "#1a3a5c" },
-                { label: "In Progress", val: inProg,   color: "#2563eb" },
-                { label: "Lacking",     val: lacking,  color: "#c0392b" },
-                { label: "Approved",    val: approved, color: "#1a8a3a" },
-              ].map(({ label, val, color }) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "10px", marginBottom: "22px" }}>
+              {[{ label: "Total", val: total, color: "#1a3a5c" }, { label: "In Progress", val: inProg, color: "#2563eb" }, { label: "Lacking", val: lacking, color: "#c0392b" }, { label: "Approved", val: approved, color: "#1a8a3a" }].map(({ label, val, color }) => (
                 <div key={label} style={{ border: "1px solid #e0e8f0", borderRadius: "6px", padding: "10px 14px", textAlign: "center" }}>
                   <div style={{ fontSize: "22px", fontWeight: "700", color }}>{val}</div>
                   <div style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>{label}</div>
                 </div>
               ))}
             </div>
-            <div style={{ borderBottom: "2px solid #1a3a5c", marginBottom: "0" }} />
           </div>
-
-          {/* ── SECTION LABEL ── */}
-          <div data-pdf-label style={{ padding: "10px 32px 8px" }}>
-            <div style={{ fontSize: "11px", fontWeight: "700", letterSpacing: "0.8px", textTransform: "uppercase", color: "#1a3a5c" }}>
-              {includeRemarks ? "Document Details with Remarks" : "Document Lists"}
-            </div>
+          <div data-pdf-label style={{ padding: "0 32px 8px" }}>
+            <div style={{ fontSize: "10px", fontWeight: "700", letterSpacing: "0.8px", textTransform: "uppercase", color: "#8a9ab0" }}>{includeRemarks ? "Document Details with Remarks" : "Document List"}</div>
           </div>
-
-          {/* ── DOCUMENT CONTENT ── */}
           {includeRemarks ? (
             <div style={{ padding: "0 32px" }}>{filtered.map((d, i) => renderCard(d, i))}</div>
           ) : (
@@ -944,7 +1028,7 @@ export default function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
                 <thead>
                   <tr>
-                    {["Project ID", "Subject", "Assigned To", "Status", "Progress"].map((h) => (
+                    {["Project ID", "Subject", "Assigned To", "Status", "Progress", ...(includeLastUpdated ? ["Last Updated"] : [])].map((h) => (
                       <th key={h} style={{ padding: "8px 10px", textAlign: "left", borderBottom: "2px solid #1a3a5c", color: "#1a3a5c", fontWeight: "700", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px", background: "#f4f8fc" }}>{h}</th>
                     ))}
                   </tr>
@@ -956,15 +1040,19 @@ export default function Dashboard() {
                     const pidColor = projectIdColor(d, thresholds);
                     const assigned = members?.find((m) => (m.uid || m.id) === d.assignedTo);
                     const pct      = stageToPercent(d.status, statuses);
+                    const activity = getActivityLabel(d);
                     return (
                       <tr key={d.id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", fontWeight: "700", color: pidColor, fontSize: "12px" }}>{pidLabel}</td>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#1a3a5c" }}>{d.subject || "—"}</td>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#555" }}>{assigned?.displayName || "—"}</td>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#1a3a5c", fontWeight: "500" }}>{d.status}</td>
-                        <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#555" }}>
-                          {pct !== null ? `${pct}%` : "—"}
-                        </td>
+                        <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#555" }}>{pct !== null ? `${pct}% (${statuses.indexOf(d.status) + 1}/${statuses.length})` : "—"}</td>
+                        {includeLastUpdated && (
+                          <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#777", fontSize: "10px", fontStyle: "italic" }}>
+                            {activity ? activity.label : "—"}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -972,19 +1060,15 @@ export default function Dashboard() {
               </table>
             </div>
           )}
-
-          {/* ── FOOTER ── */}
           <div data-pdf-footer style={{ padding: "16px 32px 28px" }}>
             <div style={{ borderTop: "1px solid #d0dde8", paddingTop: "8px", fontSize: "10px", color: "#aaa", display: "flex", justifyContent: "space-between" }}>
-              <span>Generated from Dashboard</span>
-              <span>Printed on {dateStrFull}</span>
+              <span>Generated from Dashboard</span><span>Printed on {dateStrFull}</span>
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* ── Visible Dashboard UI ── */}
+      {/* ── Visible Dashboard UI ─────────────────────────────────────────────── */}
       <div style={S.header}>
         <div style={S.title}>Dashboard</div>
         <div style={S.date}>{dateStrFull}</div>
@@ -1028,7 +1112,7 @@ export default function Dashboard() {
         <div style={S.sortGroup}>
           <span style={S.sortLbl}>Sort</span>
           <div style={S.divider} />
-          <button style={S.sortBtn(sortOrder === "none")}  onClick={() => setSortOrder("none")}>—</button>
+          <button style={S.sortBtn(sortOrder === "none")}  onClick={() => setSortOrder("none")} title="Sort by most recently updated">🕒</button>
           <button style={S.sortBtn(sortOrder === "asc")}   onClick={() => setSortOrder(sortOrder === "asc"  ? "none" : "asc")}>A→Z</button>
           <button style={S.sortBtn(sortOrder === "desc")}  onClick={() => setSortOrder(sortOrder === "desc" ? "none" : "desc")}>Z→A</button>
         </div>
@@ -1038,6 +1122,13 @@ export default function Dashboard() {
           🖨️ Print
         </button>
       </div>
+
+      {/* Sort hint — only show when default sort is active */}
+      {sortOrder === "none" && (
+        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "10px", fontStyle: "italic" }}>
+          🕒 Sorted by most recently updated — documents with recent changes appear first.
+        </div>
+      )}
 
       <div style={{ overflowX: "auto" }}>
         <table style={S.table}>
@@ -1066,6 +1157,8 @@ export default function Dashboard() {
               const barColor   = pct !== null ? progressBarColor(pct) : "var(--border-main)";
               const assigned   = members?.find((m) => (m.uid || m.id) === d.assignedTo);
               const hasRemarks = !!getTooltipContent(d);
+              const activity   = getActivityLabel(d);
+
               return (
                 <tr key={d.id} onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                   <td style={{ ...S.td, fontWeight: "700", color: pidColor, fontSize: "13px" }}>{pidLabel}</td>
@@ -1074,13 +1167,28 @@ export default function Dashboard() {
                     {assigned && <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginTop: "2px" }}>{assigned.displayName}</div>}
                   </td>
                   <td style={S.td}>
-                    <span
-                      style={{ ...S.pill(d.status), borderBottom: hasRemarks ? "1.5px dashed currentColor" : "none", paddingBottom: hasRemarks ? "2px" : "3px", cursor: "default" }}
-                      onMouseEnter={(e) => handleStatusMouseEnter(e, d)}
-                      onMouseLeave={handleStatusMouseLeave}
-                    >
-                      {d.status}
-                    </span>
+                    {/* Status pill + activity label side by side */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                      <span
+                        style={{ ...S.pill(d.status), borderBottom: hasRemarks ? "1.5px dashed currentColor" : "none", paddingBottom: hasRemarks ? "2px" : "3px", cursor: "default" }}
+                        onMouseEnter={(e) => handleStatusMouseEnter(e, d)}
+                        onMouseLeave={handleStatusMouseLeave}
+                      >
+                        {d.status}
+                      </span>
+                      {/* Recently Updated label */}
+                      {activity && (
+                        <span style={{
+                          fontSize: "10px",
+                          color: activity.isNew ? "var(--success)" : "var(--text-muted)",
+                          fontStyle: "italic",
+                          whiteSpace: "nowrap",
+                          letterSpacing: "0.1px",
+                        }}>
+                          {activity.isNew ? "🆕" : "🕒"} {activity.label}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={S.td}>
                     {pct !== null ? (

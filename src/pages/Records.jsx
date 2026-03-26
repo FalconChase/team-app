@@ -83,31 +83,34 @@ function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, memb
       {type === "member" && (
         members.length > 0
           ? (
-            <select style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
+            <select id={valueKey} name={valueKey} style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
               <option value="">— Select member —</option>
               {members.map(m => (
                 <option key={m.uid || m.id} value={m.uid || m.id}>{m.displayName}</option>
               ))}
             </select>
           )
-          : <input style={S.input} placeholder="Member name (no members loaded yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Member name (no members loaded yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
 
       {type === "department" && (
         departments.length > 0
           ? (
-            <select style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
+            <select id={valueKey} name={valueKey} style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
               <option value="">— Select department —</option>
               {departments.map((d, i) => (
                 <option key={i} value={d}>{d}</option>
               ))}
             </select>
           )
-          : <input style={S.input} placeholder="Department name (none configured yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Department name (none configured yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
 
       {type === "contractor" && (
         <input
+          id={freeTextKey}
+          name={freeTextKey}
+          autoComplete="off"
           style={S.input}
           placeholder="Contractor / external party name"
           value={freeText}
@@ -153,11 +156,11 @@ function DocumentRows({ docs, setForm, readOnly }) {
         <div key={i} style={S.row}>
           {readOnly
             ? <span style={{ fontSize: "12px", color: "var(--text-primary)", fontWeight: "600" }}>{d.docNumber || "—"}</span>
-            : <input style={S.input} placeholder="e.g. DOC-001" value={d.docNumber} onChange={e => updateDoc(i, "docNumber", e.target.value)} />
+            : <input id={`docNumber-${i}`} name={`docNumber-${i}`} autoComplete="off" style={S.input} placeholder="e.g. DOC-001" value={d.docNumber} onChange={e => updateDoc(i, "docNumber", e.target.value)} />
           }
           {readOnly
             ? <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>{d.description || "—"}</span>
-            : <input style={S.input} placeholder="Brief description" value={d.description} onChange={e => updateDoc(i, "description", e.target.value)} />
+            : <input id={`docDesc-${i}`} name={`docDesc-${i}`} autoComplete="off" style={S.input} placeholder="Brief description" value={d.description} onChange={e => updateDoc(i, "description", e.target.value)} />
           }
           {!readOnly && docs.length > 1 && (
             <button style={S.delBtn} onClick={() => removeDoc(i)}
@@ -307,7 +310,7 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
               <span style={S.sLabel}>Date</span>
               {isView
                 ? <div style={S.viewVal}>{formatDate(record.date)}</div>
-                : <input type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+                : <input id="record-date" name="record-date" type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
               }
             </div>
             <div>
@@ -315,7 +318,7 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
               {isView
                 ? <div style={S.viewVal}>{project?.projectId || record.projectId || "—"}</div>
                 : (
-                  <select style={S.select} value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
+                  <select id="record-project" name="record-project" style={S.select} value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
                     <option value="">— Select project —</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>
@@ -388,7 +391,7 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
             <span style={S.sLabel}>Remarks</span>
             {isView
               ? <div style={{ ...S.viewVal, minHeight: "40px", lineHeight: "1.5" }}>{record.remarks || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>None</span>}</div>
-              : <textarea style={{ ...S.input, minHeight: "70px", resize: "vertical", lineHeight: "1.5" }} placeholder="Optional remarks or notes…" value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
+              : <textarea id="record-remarks" name="record-remarks" style={{ ...S.input, minHeight: "70px", resize: "vertical", lineHeight: "1.5" }} placeholder="Optional remarks or notes…" value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
             }
           </div>
 
@@ -610,18 +613,20 @@ export default function Records() {
 
       {/* Filters */}
       <div style={S.filters}>
-        <select style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
+        <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
           <option value="All">All Types</option>
           <option value="IN">▼ Incoming</option>
           <option value="OUT">▲ Outgoing</option>
         </select>
-        <select style={S.select} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+        <select id="filter-project" name="filter-project" style={S.select} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
           <option value="All">All Projects</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>
           ))}
         </select>
         <input
+          id="filter-date"
+          name="filter-date"
           type="date"
           style={S.dateInput}
           value={filterDate}

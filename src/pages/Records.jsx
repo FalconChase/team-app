@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import {
   collection, query, where, onSnapshot,
-  addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy
+  addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -623,8 +623,7 @@ export default function Records() {
     if (!userProfile?.teamId) return;
     const q = query(
       collection(db, "records"),
-      where("teamId", "==", userProfile.teamId),
-      orderBy("date", "desc")
+      where("teamId", "==", userProfile.teamId)
     );
     const unsub = onSnapshot(q, snap => {
       setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));

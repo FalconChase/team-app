@@ -10,6 +10,7 @@ import Announcements from "./pages/Announcements";
 import Members from "./pages/Members";
 import Chat from "./pages/Chat";
 import { Setup, Pending, Settings, Reports } from "./pages/Misc";
+import Records from "./pages/Records";
 
 function RequireAuth({ children }) {
   const { currentUser, userProfile, loading } = useAuth();
@@ -76,6 +77,7 @@ function AppRoutes() {
       <Route path="/"              element={<ProtectedPage><Dashboard /></ProtectedPage>} />
       <Route path="/documents"     element={<ProtectedPage><Documents /></ProtectedPage>} />
       <Route path="/projects"      element={<ProtectedPage><Projects /></ProtectedPage>} />
+      <Route path="/records"       element={<ProtectedPage><Records /></ProtectedPage>} />
       <Route path="/announcements" element={<ProtectedPage><Announcements /></ProtectedPage>} />
       <Route path="/members"       element={<ProtectedPage><Members /></ProtectedPage>} />
       <Route path="/chat"          element={<ProtectedPage><Chat /></ProtectedPage>} />

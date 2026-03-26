@@ -6,7 +6,8 @@ import { useTeam } from "../contexts/TeamContext";
 const NAV = [
   { path: "/", label: "Dashboard", icon: "⊞" },
   { path: "/documents", label: "Documents", icon: "📄" },
-  { path: "/projects", label: "Projects", icon: "🏗️" },   // ← ADD THIS
+  { path: "/projects", label: "Projects", icon: "🏗️" },
+  { path: "/records", label: "Records", icon: "📋" },
   { path: "/announcements", label: "Announcements", icon: "📢" },
   { path: "/members", label: "Members", icon: "👥" },
   { path: "/chat", label: "Group Chat", icon: "💬" }

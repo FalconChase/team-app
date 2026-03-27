@@ -9,6 +9,7 @@ import Projects from "./pages/Projects";
 import Announcements from "./pages/Announcements";
 import Members from "./pages/Members";
 import Chat from "./pages/Chat";
+import Tools from "./pages/Tools";
 import Records from "./pages/Records";
 import Archive from "./pages/Archive";
 import { Setup, Pending, Settings, Reports } from "./pages/Misc";
@@ -53,6 +54,7 @@ function AppRoutes() {
       <Route path="/announcements" element={<ProtectedPage><Announcements /></ProtectedPage>} />
       <Route path="/members"       element={<ProtectedPage><Members /></ProtectedPage>} />
       <Route path="/chat"          element={<ProtectedPage><Chat /></ProtectedPage>} />
+      <Route path="/tools" element={<ProtectedPage><Tools /></ProtectedPage>} />
       <Route path="/settings"      element={<ProtectedPage><Settings /></ProtectedPage>} />
       <Route path="/reports"       element={<ProtectedPage><Reports /></ProtectedPage>} />
       <Route path="/records"       element={<ProtectedPage><Records /></ProtectedPage>} />

@@ -10,7 +10,8 @@ const NAV = [
   { path: "/records", label: "Records", icon: "📋" },
   { path: "/announcements", label: "Announcements", icon: "📢" },
   { path: "/members", label: "Members", icon: "👥" },
-  { path: "/chat", label: "Group Chat", icon: "💬" }
+  { path: "/chat", label: "Group Chat", icon: "💬" },
+  { path: "/tools", label: "Tools", icon: "🔧" },
 ];
 
 export default function Layout({ children }) {

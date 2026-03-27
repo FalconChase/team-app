@@ -37,10 +37,10 @@ export default function Tools() {
     iframeRef.current.contentWindow.postMessage(
       {
         type: "PROJECT_AUTOFILL",
-        contractId: project.projectId,
-        projectName: project.projectName,
-        contractor: project.contractor,
-        location: project.location,
+        contractId: project.projectId ?? "",
+        projectName: project.projectName ?? "",
+        contractor: project.contractor ?? "",
+        location: project.location ?? "",
       },
       "https://weather-tool.web.app"
     );

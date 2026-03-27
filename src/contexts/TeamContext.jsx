@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import {
-  doc, getDoc, setDoc, updateDoc, collection, query,
-  where, onSnapshot, getDocs, serverTimestamp, addDoc, deleteDoc
+  doc, updateDoc, collection, query,
+  where, onSnapshot, getDocs, serverTimestamp, addDoc
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "./AuthContext";
@@ -11,10 +11,19 @@ export const useTeam = () => useContext(TeamContext);
 
 export function TeamProvider({ children }) {
   const { userProfile } = useAuth();
-  const [team, setTeam] = useState(null);
-  const [members, setMembers] = useState([]);
+  const [team,            setTeam]            = useState(null);
+  const [members,         setMembers]         = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
 
+  // Derive admin flag from userProfile directly — stable, no function reference
+  const adminRoles = ["admin", "manager", "supervisor"];
+  const userIsAdmin = adminRoles.includes(userProfile?.role);
+
+  function isAdmin() {
+    return adminRoles.includes(userProfile?.role);
+  }
+
+  // ── Team listener ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const unsub = onSnapshot(doc(db, "teams", userProfile.teamId), (snap) => {
@@ -23,64 +32,55 @@ export function TeamProvider({ children }) {
     return unsub;
   }, [userProfile?.teamId]);
 
+  // ── Active members listener ────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
-
-    console.log("Querying with teamId:", userProfile.teamId);
-
     const q = query(
       collection(db, "users"),
       where("teamId", "==", userProfile.teamId),
       where("status", "==", "active")
     );
-
     const unsub = onSnapshot(q, (snap) => {
-      console.log("Members found:", snap.docs.length);
-      console.log("Members data:", snap.docs.map(d => d.data()));
       setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-
     return unsub;
   }, [userProfile?.teamId]);
 
+  // ── Pending requests listener (admin only) ─────────────────────────────────
+  // Use the stable `userIsAdmin` boolean instead of calling isAdmin() in deps
   useEffect(() => {
-    if (!userProfile?.teamId || !isAdmin()) return;
-    const q = query(collection(db, "users"), where("teamId", "==", userProfile.teamId), where("status", "==", "pending"));
+    if (!userProfile?.teamId || !userIsAdmin) return;
+    const q = query(
+      collection(db, "users"),
+      where("teamId", "==", userProfile.teamId),
+      where("status", "==", "pending")
+    );
     const unsub = onSnapshot(q, (snap) => {
       setPendingRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return unsub;
-  }, [userProfile?.teamId, userProfile?.role]);
+  }, [userProfile?.teamId, userIsAdmin]);
 
-  function isAdmin() {
-    return userProfile?.role === "admin" || userProfile?.role === "manager" || userProfile?.role === "supervisor";
-  }
-
+  // ── Team actions ───────────────────────────────────────────────────────────
   async function createTeam(teamName, departmentName) {
-    // ✅ FIX: Never create a new team if user already has one
-    if (userProfile?.teamId) {
-      return userProfile.teamId;
-    }
+    if (userProfile?.teamId) return userProfile.teamId;
     const teamRef = await addDoc(collection(db, "teams"), {
       name: teamName,
       department: departmentName,
       createdAt: serverTimestamp(),
       createdBy: userProfile.uid,
-      inviteCode: Math.random().toString(36).substring(2, 10).toUpperCase()
+      inviteCode: Math.random().toString(36).substring(2, 10).toUpperCase(),
     });
     await updateDoc(doc(db, "users", userProfile.uid), {
       teamId: teamRef.id,
       role: "admin",
-      status: "active"
+      status: "active",
     });
     return teamRef.id;
   }
 
   async function approveRequest(userId) {
-    await updateDoc(doc(db, "users", userId), {
-      status: "active",
-      teamId: userProfile.teamId  // ✅ FIX: Always ensure teamId is set on approval
-    });
+    await updateDoc(doc(db, "users", userId), { status: "active", teamId: userProfile.teamId });
   }
 
   async function rejectRequest(userId) {
@@ -116,7 +116,7 @@ export function TeamProvider({ children }) {
       team, members, pendingRequests, isAdmin,
       createTeam, approveRequest, rejectRequest,
       removeMember, grantAdmin, revokeAdmin,
-      updateTeamSettings, getTeamByInviteCode
+      updateTeamSettings, getTeamByInviteCode,
     }}>
       {children}
     </TeamContext.Provider>

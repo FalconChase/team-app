@@ -26,18 +26,18 @@ export default function Tools() {
   }, [userProfile?.teamId]);
 
   const handleSelect = (e) => {
-    const contractId = e.target.value;
-    setSelectedId(contractId);
+    const projectId = e.target.value;
+    setSelectedId(projectId);
 
-    if (!contractId) return;
+    if (!projectId) return;
 
-    const project = projects.find((p) => p.contractId === contractId);
+    const project = projects.find((p) => p.projectId === projectId);
     if (!project || !iframeRef.current) return;
 
     iframeRef.current.contentWindow.postMessage(
       {
         type: "PROJECT_AUTOFILL",
-        contractId: project.contractId,
+        contractId: project.projectId,
         projectName: project.projectName,
         contractor: project.contractor,
         location: project.location,
@@ -81,8 +81,8 @@ export default function Tools() {
         >
           <option value="">— Select a project to auto-fill —</option>
           {projects.map((p) => (
-            <option key={p.id} value={p.contractId}>
-              {p.contractId} — {p.projectName}
+            <option key={p.id} value={p.projectId}>
+              {p.projectId} — {p.projectName}
             </option>
           ))}
         </select>

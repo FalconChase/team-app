@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import {
   collection, query, where, onSnapshot,
   addDoc, updateDoc, deleteDoc, doc,
-  serverTimestamp, arrayUnion, getDocs,
+  serverTimestamp, arrayUnion,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -23,6 +23,7 @@ export const DEFAULT_STATUSES = [
   "FOR SCANNING",
   "FOR APPROVAL IN PCMA",
   "FOR SUBMISSION ON GOOGLE DOCS",
+  "ARCHIVED",
 ];
 
 const DEFAULT_SUBJECT_TYPES = [
@@ -61,6 +62,7 @@ const STATUS_COLORS = {
   "FOR SCANNING":                  ["#e8f4fd", "#1565c0"],
   "FOR APPROVAL IN PCMA":          ["#e8f5e9", "#2d6e12"],
   "FOR SUBMISSION ON GOOGLE DOCS": ["#f0eee8", "#5a5a5a"],
+  "ARCHIVED":                      ["#f0f0f0", "#6b6b6b"],
 };
 
 const toKey   = (str) => str.replace(/\s+/g, "_");
@@ -127,6 +129,150 @@ function ensureDrainStyle() {
     el.textContent = `@keyframes lackingDrain { from { width: 100%; } to { width: 0%; } }`;
     document.head.appendChild(el);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ArchiveWarningModal
+// ═══════════════════════════════════════════════════════════════════════════════
+function ArchiveWarningModal({ docSubject, onConfirm, onCancel }) {
+  const [checked, setChecked] = useState(false);
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.65)",
+        zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "20px",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div style={{
+        background: "var(--bg-card)",
+        borderRadius: "12px",
+        padding: "28px",
+        width: "100%",
+        maxWidth: "420px",
+        border: "1.5px solid var(--danger, #c0392b)",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.22)",
+      }}>
+        {/* Icon + Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+          <div style={{
+            width: "40px", height: "40px", borderRadius: "50%",
+            background: "#fcebeb", display: "flex", alignItems: "center",
+            justifyContent: "center", flexShrink: 0, fontSize: "20px",
+          }}>
+            🗄️
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)" }}>
+              Archive Document?
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+              This action is permanent and cannot be undone in-app.
+            </div>
+          </div>
+        </div>
+
+        {/* Document name */}
+        {docSubject && (
+          <div style={{
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border-main)",
+            borderRadius: "6px",
+            padding: "10px 14px",
+            fontSize: "12px",
+            color: "var(--text-primary)",
+            marginBottom: "18px",
+            fontStyle: "italic",
+          }}>
+            "{docSubject}"
+          </div>
+        )}
+
+        {/* Warning text */}
+        <div style={{
+          background: "#fcebeb",
+          border: "1px solid #e8b4b4",
+          borderRadius: "8px",
+          padding: "12px 14px",
+          marginBottom: "20px",
+          fontSize: "12px",
+          color: "#a32d2d",
+          lineHeight: "1.6",
+        }}>
+          <div style={{ fontWeight: "700", marginBottom: "6px" }}>⚠️ Before you proceed:</div>
+          <ul style={{ margin: 0, paddingLeft: "18px" }}>
+            <li>This document will be <strong>permanently archived</strong>.</li>
+            <li>It will be <strong>hidden</strong> from the Dashboard and Documents tab.</li>
+            <li>This action <strong>cannot be undone</strong>.</li>
+            <li style={{ marginTop: "6px", color: "#7a5c00", listStyle: "none", marginLeft: "-4px", fontStyle: "italic", fontSize: "11px" }}>
+              📋 Any proposed edits to an archived document will require permission from the respective section or authorized personnel.
+            </li>
+          </ul>
+        </div>
+
+        {/* Checkbox confirmation */}
+        <label
+          style={{
+            display: "flex", alignItems: "flex-start", gap: "10px",
+            cursor: "pointer", marginBottom: "22px",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            border: `1.5px solid ${checked ? "var(--danger, #c0392b)" : "var(--border-main)"}`,
+            background: checked ? "#fcebeb" : "var(--bg-hover)",
+            transition: "all 0.15s ease",
+            userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => setChecked(e.target.checked)}
+            style={{ marginTop: "1px", accentColor: "var(--danger, #c0392b)", flexShrink: 0 }}
+          />
+          <span style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.5" }}>
+            I understand that archiving this document is <strong>permanent</strong> and cannot be undone.
+          </span>
+        </label>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: "9px 20px", borderRadius: "6px", cursor: "pointer",
+              fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "12px",
+              border: "1px solid var(--border-input)",
+              background: "var(--bg-card)",
+              color: "var(--text-primary)",
+              fontWeight: "500",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!checked}
+            style={{
+              padding: "9px 20px", borderRadius: "6px",
+              fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "12px",
+              fontWeight: "600",
+              border: "none",
+              background: checked ? "var(--danger, #c0392b)" : "var(--border-light)",
+              color: checked ? "#fff" : "var(--text-disabled)",
+              cursor: checked ? "pointer" : "not-allowed",
+              transition: "all 0.15s ease",
+            }}
+          >
+            Archive Permanently
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── LackingItem ──────────────────────────────────────────────────────────────
@@ -196,26 +342,46 @@ function DetailsPanel({
   document: d, statuses, members, adminMode,
   onStatusChange, onSaveDetails, onToggleLacking,
   onRemoveLackingItem, onClearCompleted,
-  onAddCustomItem, onAssignMember, onDelete, onArchive,
+  onAddCustomItem, onAssignMember, onDelete,
 }) {
   const { status } = d;
   const key = toKey(status);
 
-  const [localData, setLocalData] = useState(() => d.statusDetails?.[key] || {});
-  const [newItem,   setNewItem]   = useState("");
-  const [saving,    setSaving]    = useState(false);
-  const [archiving, setArchiving] = useState(false);
+  const [localData,        setLocalData]        = useState(() => d.statusDetails?.[key] || {});
+  const [newItem,          setNewItem]          = useState("");
+  const [saving,           setSaving]           = useState(false);
+  const [pendingArchive,   setPendingArchive]   = useState(false); // show warning modal
+  const [selectedStatus,   setSelectedStatus]   = useState(status); // track dropdown value
 
   useEffect(() => { ensureDrainStyle(); }, []);
-  useEffect(() => { setLocalData(d.statusDetails?.[toKey(d.status)] || {}); }, [d.id, d.status, JSON.stringify(d.statusDetails)]);
+  useEffect(() => {
+    setLocalData(d.statusDetails?.[toKey(d.status)] || {});
+    setSelectedStatus(d.status);
+  }, [d.id, d.status, JSON.stringify(d.statusDetails)]);
 
   async function handleSave() { setSaving(true); await onSaveDetails(status, localData); setSaving(false); }
 
-  async function handleArchive() {
-    if (!window.confirm(`Archive "${d.subject}"? It will be hidden from Documents and Dashboard. The archive entry in Records will remain as a permanent log.`)) return;
-    setArchiving(true);
-    await onArchive();
-    setArchiving(false);
+  // ─── Status dropdown change ─────────────────────────────────────────────────
+  function handleStatusDropdownChange(newSt) {
+    if (newSt === "ARCHIVED") {
+      // Intercept — show warning modal, don't save yet
+      setSelectedStatus("ARCHIVED"); // visually show selection
+      setPendingArchive(true);
+    } else {
+      setSelectedStatus(newSt);
+      onStatusChange(newSt);
+    }
+  }
+
+  function handleArchiveConfirm() {
+    setPendingArchive(false);
+    onStatusChange("ARCHIVED");
+  }
+
+  function handleArchiveCancel() {
+    setPendingArchive(false);
+    // Revert dropdown back to the current saved status
+    setSelectedStatus(d.status);
   }
 
   const lacking  = d.statusDetails?.["LACKING"] || { items: [], customItems: [] };
@@ -229,6 +395,15 @@ function DetailsPanel({
 
   return (
     <div style={{ maxWidth: "600px" }}>
+
+      {/* Archive Warning Modal */}
+      {pendingArchive && (
+        <ArchiveWarningModal
+          docSubject={d.subject}
+          onConfirm={handleArchiveConfirm}
+          onCancel={handleArchiveCancel}
+        />
+      )}
 
       {isEarlyStatus && (
         <div style={{ marginBottom: "14px", background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--warning)" }}>
@@ -255,9 +430,21 @@ function DetailsPanel({
       {adminMode && (
         <>
           <div style={S.sectionLabel}>Change Status</div>
-          <select style={{ ...S.select, marginBottom: "4px" }} value={status} onChange={(e) => onStatusChange(e.target.value)}>
-            {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
+          <select
+            style={{ ...S.select, marginBottom: "4px" }}
+            value={selectedStatus}
+            onChange={(e) => handleStatusDropdownChange(e.target.value)}
+          >
+            {statuses.map((st) => (
+              <option key={st} value={st} style={st === "ARCHIVED" ? { color: "#a32d2d", fontWeight: "600" } : {}}>
+                {st === "ARCHIVED" ? "🗄️ ARCHIVED (permanent)" : st}
+              </option>
+            ))}
           </select>
+          {/* Archive hint below the dropdown */}
+          <div style={{ fontSize: "10px", color: "var(--text-muted)", fontStyle: "italic", marginBottom: "8px" }}>
+            ⚠️ Selecting <strong>ARCHIVED</strong> is permanent and cannot be undone in-app.
+          </div>
           <div style={S.divider} />
         </>
       )}
@@ -358,7 +545,56 @@ function DetailsPanel({
         </div>
       )}
 
-      {!["FOR DoTS", "LACKING", "FOR APPROVAL"].includes(status) && (
+      {status === "ARCHIVED" && (
+        <div>
+          <div style={S.sectionLabel}>Archive Details</div>
+
+          {/* Archive date — admin editable */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={S.label}>
+              Date Archived
+              {adminMode && (
+                <span style={{ marginLeft: "6px", fontSize: "10px", color: "var(--text-muted)", fontWeight: 400, fontStyle: "italic" }}>
+                  (admin editable)
+                </span>
+              )}
+            </label>
+            <input
+              style={{ ...S.input, maxWidth: "200px" }}
+              type="date"
+              disabled={!adminMode}
+              value={localData.archivedDate || (d.archivedAt?.toDate ? d.archivedAt.toDate().toISOString().slice(0, 10) : "")}
+              onChange={(e) => setLocalData((p) => ({ ...p, archivedDate: e.target.value }))}
+            />
+          </div>
+
+          {/* Archived by — read only */}
+          {d.archivedBy && (
+            <div style={{ marginBottom: "12px" }}>
+              <label style={S.label}>Archived By</label>
+              <div style={{ fontSize: "12px", color: "var(--text-primary)" }}>{d.archivedBy}</div>
+            </div>
+          )}
+
+          {/* Future note */}
+          <div style={{
+            fontSize: "10px", color: "var(--text-muted)", fontStyle: "italic",
+            background: "var(--bg-secondary)", borderRadius: "6px",
+            padding: "8px 12px", marginBottom: "12px",
+            border: "1px dashed var(--border-main)",
+          }}>
+            📋 Date editability will be governed by per-section authorization once that feature is implemented.
+          </div>
+
+          {adminMode && (
+            <button style={{ ...S.smBtn(true) }} onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {!["FOR DoTS", "LACKING", "FOR APPROVAL", "ARCHIVED"].includes(status) && (
         <div>
           <label style={S.label}>Notes / Remarks</label>
           <textarea style={{ ...S.input, resize: "vertical", minHeight: "64px" }} value={localData.notes || ""}
@@ -371,24 +607,7 @@ function DetailsPanel({
       {adminMode && (
         <>
           <div style={S.divider} />
-          {/* Archive button — admin only */}
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              style={{
-                ...S.smBtn(false, false),
-                border: "1px solid var(--warning, #d97706)",
-                color: "var(--warning, #d97706)",
-                opacity: archiving ? 0.6 : 1,
-                cursor: archiving ? "not-allowed" : "pointer",
-              }}
-              onClick={handleArchive}
-              disabled={archiving}
-              title="Hide this document from Documents and Dashboard. The archive log entry in Records will remain."
-            >
-              {archiving ? "Archiving…" : "🗄 Archive"}
-            </button>
-            <button style={S.smBtn(false, true)} onClick={onDelete}>Delete Document</button>
-          </div>
+          <button style={S.smBtn(false, true)} onClick={onDelete}>Delete Document</button>
         </>
       )}
     </div>
@@ -403,6 +622,9 @@ function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, mem
   const isRpdm   = form.subjectType === "RPDM";
   const preview  = needsNum ? composeLabel(form.subjectType, form.subjectNum, form.rpdmRef) : null;
   const [saving, setSaving] = useState(false);
+
+  // Exclude ARCHIVED from the initial status options when adding a new doc
+  const addableStatuses = statuses.filter((st) => st !== "ARCHIVED");
 
   async function handleSave() { setSaving(true); await onSave(); setSaving(false); }
 
@@ -444,7 +666,7 @@ function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, mem
 
         <label style={S.label}>Initial Status</label>
         <select style={{ ...S.input, marginBottom: "12px" }} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-          {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
+          {addableStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
 
         <label style={S.label}>DoTS Date</label>
@@ -510,14 +732,7 @@ export default function Documents() {
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
-    return onSnapshot(q, (snap) =>
-      // Filter out archived documents — they are invisible in Documents tab
-      setDocuments(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((d) => !d.archived)
-      )
-    );
+    return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
   }, [userProfile?.teamId]);
 
   useEffect(() => {
@@ -567,25 +782,41 @@ export default function Documents() {
       createdBy: userProfile.displayName || userProfile.email || "Unknown",
       lastModifiedAt: serverTimestamp(),
       lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
-      archived: false,
       activityLog: [{ text: `Document created by ${userProfile.displayName}`, by: userProfile.displayName, at: new Date().toISOString() }],
     });
     setShowForm(false);
     setForm(BLANK_FORM);
   }
 
-  async function handleStatusChange(docId, newStatus) {
+  async function handleStatusChange(docId, newStatus, docDisplayName) {
+    const logText = newStatus === "ARCHIVED"
+      ? `Document archived by ${userProfile.displayName}`
+      : `Status updated to "${newStatus}"`;
+
+    const extraFields = newStatus === "ARCHIVED" ? {
+      archivedAt: serverTimestamp(),
+      archivedBy: userProfile.displayName || userProfile.email || "Unknown",
+    } : {};
+
     await updateDoc(doc(db, "papers", docId), {
       status: newStatus,
       ...modifierFields(),
-      activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
+      ...extraFields,
+      activityLog: arrayUnion({ text: logText, by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }
 
   async function handleSaveDetails(docId, statusLabel, details) {
     const key = toKey(statusLabel);
+
+    // If saving ARCHIVED details and admin changed the date, persist archivedAt
+    const extraFields = (statusLabel === "ARCHIVED" && details.archivedDate)
+      ? { archivedAt: new Date(details.archivedDate + "T00:00:00") }
+      : {};
+
     await updateDoc(doc(db, "papers", docId), {
       [`statusDetails.${key}`]: details,
+      ...extraFields,
       ...modifierFields(),
       activityLog: arrayUnion({ text: `Details updated for "${statusLabel}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
@@ -646,51 +877,16 @@ export default function Documents() {
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
-  // ─── Archive ───────────────────────────────────────────────────────────────
-  // Marks paper as archived (hidden from Documents + Dashboard).
-  // Writes one entry to the `archive` collection per paperId — skips if already exists.
-  async function handleArchive(currentDoc) {
-    const paperId = currentDoc.id;
-
-    // Duplicate prevention: check if archive entry already exists for this paperId
-    const existingQ = query(
-      collection(db, "archive"),
-      where("paperId", "==", paperId),
-      where("teamId",  "==", userProfile.teamId)
-    );
-    const existingSnap = await getDocs(existingQ);
-    if (existingSnap.empty) {
-      await addDoc(collection(db, "archive"), {
-        paperId,
-        teamId:      userProfile.teamId,
-        subject:     currentDoc.subject     || "",
-        projectId:   currentDoc.projectId   || "",
-        status:      currentDoc.status      || "",
-        archivedAt:  serverTimestamp(),
-        archivedBy:  userProfile.displayName || userProfile.email || "Unknown",
-      });
-    }
-
-    // Mark paper as archived and log it
-    await updateDoc(doc(db, "papers", paperId), {
-      archived: true,
-      ...modifierFields(),
-      activityLog: arrayUnion({
-        text: `Archived by ${userProfile.displayName}`,
-        by: userProfile.displayName,
-        at: new Date().toISOString(),
-      }),
-    });
-
-    // Close the expanded row
-    setExpanded((prev) => { const n = { ...prev }; delete n[paperId]; return n; });
-  }
-
+  // Filter out ARCHIVED docs from the Documents tab
   const filtered = documents.filter(
     (d) => d.projectId &&
+      d.status !== "ARCHIVED" &&
       (filterStatus === "All" || d.status === filterStatus) &&
       (filterProj   === "All" || d.projectId === filterProj)
   );
+
+  // Statuses shown in the filter dropdown (exclude ARCHIVED)
+  const filterableStatuses = statuses.filter((st) => st !== "ARCHIVED");
 
   const admin = isAdmin();
 
@@ -704,7 +900,7 @@ export default function Documents() {
       <div style={S.filters}>
         <select style={S.select} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="All">All Statuses</option>
-          {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
+          {filterableStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
         <select style={S.select} value={filterProj} onChange={(e) => setFilterProj(e.target.value)}>
           <option value="All">All Projects</option>
@@ -761,7 +957,7 @@ export default function Documents() {
                           statuses={statuses}
                           members={members}
                           adminMode={admin}
-                          onStatusChange={(newSt)           => handleStatusChange(d.id, newSt)}
+                          onStatusChange={(newSt)           => handleStatusChange(d.id, newSt, d.subject)}
                           onSaveDetails={(st, data)         => handleSaveDetails(d.id, st, data)}
                           onToggleLacking={(id, custom)     => handleToggleLacking(d.id, id, custom, d)}
                           onRemoveLackingItem={(id, custom) => handleRemoveLackingItem(d.id, id, custom, d)}
@@ -769,7 +965,6 @@ export default function Documents() {
                           onAddCustomItem={(label)          => handleAddCustomItem(d.id, label, d)}
                           onAssignMember={(uid)             => handleAssignMember(d.id, uid)}
                           onDelete={()                      => handleDelete(d.id)}
-                          onArchive={()                     => handleArchive(d)}
                         />
                       </td>
                     </tr>

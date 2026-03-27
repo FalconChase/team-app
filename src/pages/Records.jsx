@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   collection, query, where, onSnapshot,
-  addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, arrayUnion,
+  addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -53,18 +54,8 @@ function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, memb
       fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
       transition: "all 0.15s",
     }),
-    select: {
-      fontSize: "12px", padding: "8px 10px", borderRadius: "6px",
-      border: "1.5px solid var(--border-input)", background: "var(--bg-input)",
-      color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
-      width: "100%",
-    },
-    input: {
-      fontSize: "12px", padding: "8px 10px", borderRadius: "6px",
-      border: "1.5px solid var(--border-input)", background: "var(--bg-input)",
-      color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
-      width: "100%", boxSizing: "border-box",
-    },
+    select: { fontSize: "12px", padding: "8px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%" },
+    input:  { fontSize: "12px", padding: "8px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%", boxSizing: "border-box" },
   };
 
   function setType(t) {
@@ -85,37 +76,23 @@ function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, memb
           ? (
             <select id={valueKey} name={valueKey} style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
               <option value="">— Select member —</option>
-              {members.map(m => (
-                <option key={m.uid || m.id} value={m.uid || m.id}>{m.displayName}</option>
-              ))}
+              {members.map(m => <option key={m.uid || m.id} value={m.uid || m.id}>{m.displayName}</option>)}
             </select>
           )
-          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Member name (no members loaded yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Member name" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
-
       {type === "department" && (
         departments.length > 0
           ? (
             <select id={valueKey} name={valueKey} style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
               <option value="">— Select department —</option>
-              {departments.map((d, i) => (
-                <option key={i} value={d}>{d}</option>
-              ))}
+              {departments.map((d, i) => <option key={i} value={d}>{d}</option>)}
             </select>
           )
-          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Department name (none configured yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Department name" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
-
       {type === "contractor" && (
-        <input
-          id={freeTextKey}
-          name={freeTextKey}
-          autoComplete="off"
-          style={S.input}
-          placeholder="Contractor / external party name"
-          value={freeText}
-          onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))}
-        />
+        <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Contractor / external party name" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
     </div>
   );
@@ -130,19 +107,9 @@ function DocumentRows({ docs, setForm, readOnly }) {
     delBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--border-input)", fontSize: "16px", padding: "0 4px", lineHeight: 1, transition: "color 0.15s" },
   };
 
-  function addDoc() {
-    setForm(f => ({ ...f, documents: [...f.documents, { docNumber: "", description: "" }] }));
-  }
-  function removeDoc(i) {
-    setForm(f => ({ ...f, documents: f.documents.filter((_, idx) => idx !== i) }));
-  }
-  function updateDoc(i, field, val) {
-    setForm(f => {
-      const docs = [...f.documents];
-      docs[i] = { ...docs[i], [field]: val };
-      return { ...f, documents: docs };
-    });
-  }
+  function addDoc()               { setForm(f => ({ ...f, documents: [...f.documents, { docNumber: "", description: "" }] })); }
+  function removeDoc(i)           { setForm(f => ({ ...f, documents: f.documents.filter((_, idx) => idx !== i) })); }
+  function updateDoc(i, field, v) { setForm(f => { const docs = [...f.documents]; docs[i] = { ...docs[i], [field]: v }; return { ...f, documents: docs }; }); }
 
   return (
     <div>
@@ -180,7 +147,7 @@ function DocumentRows({ docs, setForm, readOnly }) {
   );
 }
 
-// ─── RecordModal — create / edit / view ──────────────────────────────────────
+// ─── RecordModal ──────────────────────────────────────────────────────────────
 function RecordModal({ mode, record, projects, members, departments, teamId, userProfile, onClose, onSaved }) {
   const isView   = mode === "view";
   const isEdit   = mode === "edit";
@@ -203,8 +170,8 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
     };
   });
 
-  const [saving, setSaving]   = useState(false);
-  const [error,  setError]    = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState("");
 
   function resolvePartyLabel(type, value, freeText) {
     if (type === "member") {
@@ -219,10 +186,8 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
   async function handleSave() {
     if (!form.date)      return setError("Date is required.");
     if (!form.projectId) return setError("Project is required.");
-
     const fromLabel = resolvePartyLabel(form.fromType, form.fromValue, form.fromFreeText);
     const toLabel   = resolvePartyLabel(form.toType,   form.toValue,   form.toFreeText);
-
     const payload = {
       teamId,
       date:      form.date,
@@ -233,21 +198,18 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
       documents: form.documents.filter(d => d.docNumber.trim() || d.description.trim()),
       remarks:   form.remarks,
     };
-
-    setSaving(true);
-    setError("");
+    setSaving(true); setError("");
     try {
       if (isCreate) {
-        payload.createdBy  = userProfile.displayName || userProfile.email;
-        payload.createdAt  = serverTimestamp();
+        payload.createdBy = userProfile.displayName || userProfile.email;
+        payload.createdAt = serverTimestamp();
         await addDoc(collection(db, "records"), payload);
       } else {
         payload.lastModifiedBy = userProfile.displayName || userProfile.email;
         payload.lastModifiedAt = serverTimestamp();
         await updateDoc(doc(db, "records", record.id), payload);
       }
-      onSaved();
-      onClose();
+      onSaved(); onClose();
     } catch (e) {
       console.error(e);
       setError("Failed to save. Please try again.");
@@ -257,40 +219,35 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
   }
 
   const project = projects.find(p => p.id === (isView || isEdit ? record?.projectId : form.projectId));
+  const typeColor = form.type === "IN" ? { bg: "#e6f4ea", color: "#1a7a38" } : { bg: "#fff3e0", color: "#b45309" };
 
   const S = {
-    overlay: { position: "fixed", inset: 0, background: "rgba(10,24,40,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
-    modal:   { background: "var(--bg-card)", borderRadius: "14px", width: "100%", maxWidth: "640px", maxHeight: "90vh", overflowY: "auto", boxShadow: "var(--shadow-lg)", border: "1px solid var(--border-main)" },
-    header:  { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 16px", borderBottom: "1.5px solid var(--border-light)" },
-    title:   { fontSize: "15px", fontWeight: "700", color: "var(--text-primary)" },
-    closeBtn:{ background: "none", border: "none", fontSize: "20px", color: "var(--text-disabled)", cursor: "pointer", lineHeight: 1 },
-    body:    { padding: "20px 24px" },
-    section: { marginBottom: "20px" },
-    sLabel:  { fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px", display: "block" },
-    row2:    { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" },
-    input:   { fontSize: "12px", padding: "8px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%", boxSizing: "border-box" },
-    select:  { fontSize: "12px", padding: "8px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%" },
-    typePill:{ display: "inline-block", fontSize: "11px", fontWeight: "700", padding: "3px 12px", borderRadius: "10px", letterSpacing: "0.5px" },
-    footer:  { display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px", borderTop: "1.5px solid var(--border-light)" },
+    overlay:  { position: "fixed", inset: 0, background: "rgba(10,24,40,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
+    modal:    { background: "var(--bg-card)", borderRadius: "14px", width: "100%", maxWidth: "640px", maxHeight: "90vh", overflowY: "auto", boxShadow: "var(--shadow-lg)", border: "1px solid var(--border-main)" },
+    header:   { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 16px", borderBottom: "1.5px solid var(--border-light)" },
+    title:    { fontSize: "15px", fontWeight: "700", color: "var(--text-primary)" },
+    closeBtn: { background: "none", border: "none", fontSize: "20px", color: "var(--text-disabled)", cursor: "pointer", lineHeight: 1 },
+    body:     { padding: "20px 24px" },
+    section:  { marginBottom: "20px" },
+    sLabel:   { fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px", display: "block" },
+    row2:     { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" },
+    input:    { fontSize: "12px", padding: "8px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%", boxSizing: "border-box" },
+    select:   { fontSize: "12px", padding: "8px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%" },
+    typePill: { display: "inline-block", fontSize: "11px", fontWeight: "700", padding: "3px 12px", borderRadius: "10px", letterSpacing: "0.5px" },
+    footer:   { display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px", borderTop: "1.5px solid var(--border-light)" },
     cancelBtn:{ fontSize: "12px", padding: "9px 18px", borderRadius: "7px", border: "1px solid var(--border-input)", background: "var(--bg-secondary)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
-    saveBtn: { fontSize: "12px", padding: "9px 22px", borderRadius: "7px", border: "none", background: saving ? "var(--bg-secondary)" : "var(--primary)", color: saving ? "var(--text-disabled)" : "#fff", cursor: saving ? "not-allowed" : "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
-    viewVal: { fontSize: "13px", color: "var(--text-primary)", padding: "8px 10px", background: "var(--bg-secondary)", borderRadius: "6px", border: "1px solid var(--border-light)" },
-    divider: { height: "1px", background: "var(--border-light)", margin: "18px 0" },
-    errorMsg:{ fontSize: "12px", color: "var(--danger)", marginBottom: "12px", padding: "8px 12px", background: "var(--danger-bg, #fcebeb)", borderRadius: "6px", border: "1px solid var(--danger)" },
+    saveBtn:  { fontSize: "12px", padding: "9px 22px", borderRadius: "7px", border: "none", background: saving ? "var(--bg-secondary)" : "var(--primary)", color: saving ? "var(--text-disabled)" : "#fff", cursor: saving ? "not-allowed" : "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
+    viewVal:  { fontSize: "13px", color: "var(--text-primary)", padding: "8px 10px", background: "var(--bg-secondary)", borderRadius: "6px", border: "1px solid var(--border-light)" },
+    divider:  { height: "1px", background: "var(--border-light)", margin: "18px 0" },
+    errorMsg: { fontSize: "12px", color: "var(--danger)", marginBottom: "12px", padding: "8px 12px", background: "var(--danger-bg, #fcebeb)", borderRadius: "6px", border: "1px solid var(--danger)" },
   };
-
-  const typeColor = form.type === "IN"
-    ? { bg: "#e6f4ea", color: "#1a7a38" }
-    : { bg: "#fff3e0", color: "#b45309" };
 
   return (
     <div style={S.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={S.modal}>
         <div style={S.header}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={S.title}>
-              {isCreate ? "New Record" : isEdit ? "Edit Record" : "Record Details"}
-            </span>
+            <span style={S.title}>{isCreate ? "New Record" : isEdit ? "Edit Record" : "Record Details"}</span>
             {(isView || isEdit) && (
               <span style={{ ...S.typePill, background: typeColor.bg, color: typeColor.color }}>
                 {record.type === "IN" ? "▼ INCOMING" : "▲ OUTGOING"}
@@ -304,24 +261,16 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
           <div style={S.row2}>
             <div>
               <span style={S.sLabel}>Date</span>
-              {isView
-                ? <div style={S.viewVal}>{formatDate(record.date)}</div>
-                : <input id="record-date" name="record-date" type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-              }
+              {isView ? <div style={S.viewVal}>{formatDate(record.date)}</div> : <input id="record-date" name="record-date" type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />}
             </div>
             <div>
               <span style={S.sLabel}>Project</span>
-              {isView
-                ? <div style={S.viewVal}>{project?.projectId || record.projectId || "—"}</div>
-                : (
-                  <select id="record-project" name="record-project" style={S.select} value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
-                    <option value="">— Select project —</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>
-                    ))}
-                  </select>
-                )
-              }
+              {isView ? <div style={S.viewVal}>{project?.projectId || record.projectId || "—"}</div> : (
+                <select id="record-project" name="record-project" style={S.select} value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
+                  <option value="">— Select project —</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>)}
+                </select>
+              )}
             </div>
           </div>
 
@@ -342,39 +291,32 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
 
           <div style={S.divider} />
 
-          {isView
-            ? (
-              <div style={S.row2}>
-                <div>
-                  <span style={S.sLabel}>From</span>
-                  <div style={S.viewVal}>{record.from?.label || "—"}</div>
-                  <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.from?.type || ""}</div>
-                </div>
-                <div>
-                  <span style={S.sLabel}>To</span>
-                  <div style={S.viewVal}>{record.to?.label || "—"}</div>
-                  <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.to?.type || ""}</div>
-                </div>
+          {isView ? (
+            <div style={S.row2}>
+              <div>
+                <span style={S.sLabel}>From</span>
+                <div style={S.viewVal}>{record.from?.label || "—"}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.from?.type || ""}</div>
               </div>
-            )
-            : (
-              <div style={S.row2}>
-                <PartyField label="From" typeKey="fromType" valueKey="fromValue" freeTextKey="fromFreeText" form={form} setForm={setForm} members={members} departments={departments} />
-                <PartyField label="To"   typeKey="toType"   valueKey="toValue"   freeTextKey="toFreeText"   form={form} setForm={setForm} members={members} departments={departments} />
+              <div>
+                <span style={S.sLabel}>To</span>
+                <div style={S.viewVal}>{record.to?.label || "—"}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.to?.type || ""}</div>
               </div>
-            )
-          }
+            </div>
+          ) : (
+            <div style={S.row2}>
+              <PartyField label="From" typeKey="fromType" valueKey="fromValue" freeTextKey="fromFreeText" form={form} setForm={setForm} members={members} departments={departments} />
+              <PartyField label="To"   typeKey="toType"   valueKey="toValue"   freeTextKey="toFreeText"   form={form} setForm={setForm} members={members} departments={departments} />
+            </div>
+          )}
 
           <div style={S.divider} />
 
           <div style={S.section}>
             <span style={S.sLabel}>Attached Documents</span>
             {isView
-              ? (
-                record.documents?.length
-                  ? <DocumentRows docs={record.documents} setForm={() => {}} readOnly />
-                  : <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>No documents attached.</div>
-              )
+              ? (record.documents?.length ? <DocumentRows docs={record.documents} setForm={() => {}} readOnly /> : <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>No documents attached.</div>)
               : <DocumentRows docs={form.documents} setForm={setForm} readOnly={false} />
             }
           </div>
@@ -389,23 +331,20 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
 
           {isView && (
             <div style={{ fontSize: "11px", color: "var(--text-muted)", borderTop: "1px solid var(--border-light)", paddingTop: "12px", display: "flex", gap: "20px", flexWrap: "wrap" }}>
-              {record.createdBy       && <span>Created by <strong>{record.createdBy}</strong></span>}
-              {record.lastModifiedBy  && <span>Last edited by <strong>{record.lastModifiedBy}</strong></span>}
+              {record.createdBy      && <span>Created by <strong>{record.createdBy}</strong></span>}
+              {record.lastModifiedBy && <span>Last edited by <strong>{record.lastModifiedBy}</strong></span>}
             </div>
           )}
 
           {error && <div style={S.errorMsg}>{error}</div>}
         </div>
 
-        {!isView && (
+        {!isView ? (
           <div style={S.footer}>
             <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
-            <button style={S.saveBtn} onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : isCreate ? "Add Record" : "Save Changes"}
-            </button>
+            <button style={S.saveBtn} onClick={handleSave} disabled={saving}>{saving ? "Saving…" : isCreate ? "Add Record" : "Save Changes"}</button>
           </div>
-        )}
-        {isView && (
+        ) : (
           <div style={{ ...S.footer, justifyContent: "flex-end" }}>
             <button style={S.cancelBtn} onClick={onClose}>Close</button>
           </div>
@@ -415,7 +354,7 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
   );
 }
 
-// ─── DeleteConfirm modal ──────────────────────────────────────────────────────
+// ─── DeleteConfirm ────────────────────────────────────────────────────────────
 function DeleteConfirm({ record, onClose, onConfirm }) {
   const [deleting, setDeleting] = useState(false);
   async function handleDelete() {
@@ -442,95 +381,36 @@ function DeleteConfirm({ record, onClose, onConfirm }) {
   );
 }
 
-// ─── RestoreConfirm modal ─────────────────────────────────────────────────────
-function RestoreConfirm({ entry, onClose, onConfirm }) {
-  const [restoring, setRestoring] = useState(false);
-  async function handleRestore() {
-    setRestoring(true);
-    await onConfirm(entry);
-    setRestoring(false);
-    onClose();
-  }
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(10,24,40,0.6)", zIndex: 2100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: "12px", padding: "24px 28px", width: "380px", boxShadow: "var(--shadow-lg)", border: "1px solid var(--border-main)" }}>
-        <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--primary)", marginBottom: "10px" }}>Restore Document?</div>
-        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px", lineHeight: "1.6" }}>
-          <strong style={{ color: "var(--text-primary)" }}>{entry.subject || entry.paperId}</strong> will reappear in Documents and Dashboard as an active file.
-        </div>
-        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "20px", fontStyle: "italic" }}>
-          The archive log entry here will remain as a permanent record.
-        </div>
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ fontSize: "12px", padding: "8px 18px", borderRadius: "7px", border: "1px solid var(--border-input)", background: "var(--bg-secondary)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" }}>Cancel</button>
-          <button onClick={handleRestore} disabled={restoring} style={{ fontSize: "12px", padding: "8px 22px", borderRadius: "7px", border: "none", background: "var(--primary)", color: "#fff", cursor: restoring ? "not-allowed" : "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", opacity: restoring ? 0.7 : 1 }}>
-            {restoring ? "Restoring…" : "Restore"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Records Page
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Records() {
   const { userProfile }            = useAuth();
   const { team, members, isAdmin } = useTeam();
+  const navigate                   = useNavigate();
 
-  // ── Tabs ───────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState("logbook"); // "logbook" | "archive"
+  const [records,       setRecords]       = useState([]);
+  const [projects,      setProjects]      = useState([]);
+  const [archivedCount, setArchivedCount] = useState(0);
+  const [loading,       setLoading]       = useState(true);
 
-  // ── Logbook state ──────────────────────────────────────────────────────────
-  const [records,   setRecords]   = useState([]);
-  const [projects,  setProjects]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-
-  // ── Archive state ──────────────────────────────────────────────────────────
-  const [archiveEntries, setArchiveEntries] = useState([]);
-  const [archiveLoading, setArchiveLoading] = useState(true);
-
-  // ── Filters ────────────────────────────────────────────────────────────────
   const [filterType,    setFilterType]    = useState("All");
   const [filterProject, setFilterProject] = useState("All");
   const [filterDate,    setFilterDate]    = useState("");
 
-  // ── Modals ─────────────────────────────────────────────────────────────────
-  const [modal,         setModal]         = useState(null);
-  const [deleteTarget,  setDeleteTarget]  = useState(null);
-  const [restoreTarget, setRestoreTarget] = useState(null);
+  const [modal,        setModal]        = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const departments = team?.departments || [];
 
-  // ── Firestore: logbook records ─────────────────────────────────────────────
+  // ── Firestore: records ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
-    const q = query(
-      collection(db, "records"),
-      where("teamId", "==", userProfile.teamId),
-      orderBy("date", "desc")
-    );
-    const unsub = onSnapshot(q, snap => {
+    const q = query(collection(db, "records"), where("teamId", "==", userProfile.teamId), orderBy("date", "desc"));
+    return onSnapshot(q, snap => {
       setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
-    return unsub;
-  }, [userProfile?.teamId]);
-
-  // ── Firestore: archive entries ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = query(
-      collection(db, "archive"),
-      where("teamId", "==", userProfile.teamId),
-      orderBy("archivedAt", "desc")
-    );
-    const unsub = onSnapshot(q, snap => {
-      setArchiveEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setArchiveLoading(false);
-    });
-    return unsub;
   }, [userProfile?.teamId]);
 
   // ── Firestore: projects ────────────────────────────────────────────────────
@@ -540,7 +420,17 @@ export default function Records() {
     return onSnapshot(q, snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, [userProfile?.teamId]);
 
-  // ── Filtered logbook records ───────────────────────────────────────────────
+  // ── Firestore: archived doc count ─────────────────────────────────────────
+  useEffect(() => {
+    if (!userProfile?.teamId) return;
+    const q = query(
+      collection(db, "papers"),
+      where("teamId", "==", userProfile.teamId),
+      where("status", "==", "ARCHIVED")
+    );
+    return onSnapshot(q, snap => setArchivedCount(snap.size));
+  }, [userProfile?.teamId]);
+
   const filtered = records.filter(r => {
     if (filterType    !== "All" && r.type      !== filterType)    return false;
     if (filterProject !== "All" && r.projectId !== filterProject) return false;
@@ -548,149 +438,70 @@ export default function Records() {
     return true;
   });
 
-  // ── Delete logbook record ──────────────────────────────────────────────────
   async function handleDelete(id) {
     await deleteDoc(doc(db, "records", id));
   }
 
-  // ── Restore archived document ──────────────────────────────────────────────
-  // Sets archived: false on the paper, logs "Restored". Archive entry stays.
-  async function handleRestore(entry) {
-    if (!entry.paperId) return;
-    await updateDoc(doc(db, "papers", entry.paperId), {
-      archived: false,
-      lastModifiedAt: serverTimestamp(),
-      lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
-      activityLog: arrayUnion({
-        text: `Restored by ${userProfile.displayName || userProfile.email}`,
-        by:   userProfile.displayName || userProfile.email,
-        at:   new Date().toISOString(),
-      }),
-    });
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
   function projectLabel(projectId) {
     const p = projects.find(p => p.id === projectId);
     return p?.projectId || p?.name || projectId || "—";
   }
 
   const adminUser  = isAdmin();
+  const totalIn    = records.filter(r => r.type === "IN").length;
+  const totalOut   = records.filter(r => r.type === "OUT").length;
   const hasFilters = filterType !== "All" || filterProject !== "All" || filterDate !== "";
 
   const S = {
-    page:     { fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", background: "var(--bg-page)", minHeight: "100vh", padding: "20px" },
-    header:   { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
-    title:    { fontSize: "18px", fontWeight: "600", color: "var(--text-primary)" },
-    subtitle: { fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" },
-    statsRow: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" },
-    stat:     { background: "var(--bg-card)", border: "0.5px solid var(--border-main)", borderRadius: "8px", padding: "14px", textAlign: "center" },
-    statNum:  (c) => ({ fontSize: "26px", fontWeight: "700", color: c || "var(--text-primary)" }),
-    statLbl:  { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" },
-    tabs:     { display: "flex", gap: "2px", marginBottom: "20px", background: "var(--bg-hover)", borderRadius: "8px", padding: "3px", border: "1px solid var(--border-main)", width: "fit-content" },
-    tab:      (active) => ({
-      fontSize: "12px", padding: "7px 18px", borderRadius: "6px", cursor: "pointer",
-      border: "none", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
-      fontWeight: active ? "700" : "500",
-      background: active ? "var(--bg-card)" : "transparent",
-      color: active ? "var(--primary)" : "var(--text-secondary)",
-      boxShadow: active ? "var(--shadow-sm)" : "none",
-      transition: "all 0.15s",
-    }),
-    filters:  { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" },
-    select:   { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
-    dateInput:{ fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
-    addBtn:   { fontSize: "12px", padding: "7px 16px", borderRadius: "7px", border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", display: "flex", alignItems: "center", gap: "6px", transition: "opacity 0.15s" },
-    table:    { width: "100%", borderCollapse: "collapse", background: "var(--bg-card)", borderRadius: "8px", overflow: "hidden", border: "0.5px solid var(--border-main)" },
-    th:       { padding: "10px 14px", textAlign: "left", fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.6px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border-main)" },
-    td:       { padding: "11px 14px", fontSize: "12px", color: "var(--text-primary)", borderBottom: "0.5px solid var(--border-light)", verticalAlign: "middle" },
-    typePill: (type) => ({
-      display: "inline-block", fontSize: "10px", fontWeight: "700", padding: "3px 9px", borderRadius: "10px", letterSpacing: "0.4px",
-      background: type === "IN" ? "#e6f4ea" : "#fff3e0",
-      color:      type === "IN" ? "#1a7a38" : "#b45309",
-    }),
-    actionBtn:(danger) => ({
-      fontSize: "11px", padding: "4px 10px", borderRadius: "5px", cursor: "pointer",
-      border: `1px solid ${danger ? "var(--danger)" : "var(--border-input)"}`,
-      background: "transparent",
-      color: danger ? "var(--danger)" : "var(--text-secondary)",
-      fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
-      transition: "all 0.15s",
-    }),
-    restoreBtn: {
-      fontSize: "11px", padding: "4px 10px", borderRadius: "5px", cursor: "pointer",
-      border: "1px solid var(--primary)",
-      background: "transparent",
-      color: "var(--primary)",
-      fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
-      transition: "all 0.15s",
-    },
-    empty:    { textAlign: "center", color: "var(--text-disabled)", padding: "48px 20px", fontSize: "13px", fontStyle: "italic" },
-    clearBtn: { fontSize: "11px", padding: "5px 12px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
+    page:      { fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", background: "var(--bg-page)", minHeight: "100vh", padding: "20px" },
+    header:    { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
+    title:     { fontSize: "18px", fontWeight: "600", color: "var(--text-primary)" },
+    subtitle:  { fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" },
+    statsRow:  { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "14px" },
+    stat:      { background: "var(--bg-card)", border: "0.5px solid var(--border-main)", borderRadius: "8px", padding: "14px", textAlign: "center" },
+    statNum:   (c) => ({ fontSize: "26px", fontWeight: "700", color: c || "var(--text-primary)" }),
+    statLbl:   { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" },
+    filters:   { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" },
+    select:    { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
+    dateInput: { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
+    addBtn:    { fontSize: "12px", padding: "7px 16px", borderRadius: "7px", border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", display: "flex", alignItems: "center", gap: "6px", transition: "opacity 0.15s" },
+    table:     { width: "100%", borderCollapse: "collapse", background: "var(--bg-card)", borderRadius: "8px", overflow: "hidden", border: "0.5px solid var(--border-main)" },
+    th:        { padding: "10px 14px", textAlign: "left", fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.6px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border-main)" },
+    td:        { padding: "11px 14px", fontSize: "12px", color: "var(--text-primary)", borderBottom: "0.5px solid var(--border-light)", verticalAlign: "middle" },
+    typePill:  (type) => ({ display: "inline-block", fontSize: "10px", fontWeight: "700", padding: "3px 9px", borderRadius: "10px", letterSpacing: "0.4px", background: type === "IN" ? "#e6f4ea" : "#fff3e0", color: type === "IN" ? "#1a7a38" : "#b45309" }),
+    actionBtn: (danger) => ({ fontSize: "11px", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", border: `1px solid ${danger ? "var(--danger)" : "var(--border-input)"}`, background: "transparent", color: danger ? "var(--danger)" : "var(--text-secondary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", transition: "all 0.15s" }),
+    empty:     { textAlign: "center", color: "var(--text-disabled)", padding: "48px 20px", fontSize: "13px", fontStyle: "italic" },
+    clearBtn:  { fontSize: "11px", padding: "5px 12px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
   };
-
-  const totalIn  = records.filter(r => r.type === "IN").length;
-  const totalOut = records.filter(r => r.type === "OUT").length;
-
-  // ── Archive tab notice ─────────────────────────────────────────────────────
-  const ArchiveNotice = () => (
-    <div style={{ fontSize: "12px", color: "var(--text-secondary)", background: "var(--bg-hover)", border: "1px solid var(--border-main)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-      <span style={{ fontSize: "16px" }}>🗄</span>
-      <span>Archive entries are a permanent log. They cannot be edited or deleted.{adminUser ? " Admins can restore a document to make it active again." : ""}</span>
-    </div>
-  );
 
   return (
     <div style={S.page}>
 
-      {/* Modals */}
       {modal && (
         <RecordModal
-          mode={modal.mode}
-          record={modal.record}
-          projects={projects}
-          members={members || []}
-          departments={departments}
-          teamId={userProfile.teamId}
-          userProfile={userProfile}
-          onClose={() => setModal(null)}
-          onSaved={() => {}}
+          mode={modal.mode} record={modal.record} projects={projects}
+          members={members || []} departments={departments}
+          teamId={userProfile.teamId} userProfile={userProfile}
+          onClose={() => setModal(null)} onSaved={() => {}}
         />
       )}
       {deleteTarget && (
-        <DeleteConfirm
-          record={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-        />
-      )}
-      {restoreTarget && (
-        <RestoreConfirm
-          entry={restoreTarget}
-          onClose={() => setRestoreTarget(null)}
-          onConfirm={handleRestore}
-        />
+        <DeleteConfirm record={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />
       )}
 
-      {/* Header */}
       <div style={S.header}>
         <div>
           <div style={S.title}>Records</div>
           <div style={S.subtitle}>Logbook of all incoming and outgoing documents</div>
         </div>
-        {activeTab === "logbook" && (
-          <button
-            style={S.addBtn}
-            onClick={() => setModal({ mode: "create" })}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >
-            + New Record
-          </button>
-        )}
+        <button style={S.addBtn} onClick={() => setModal({ mode: "create" })}
+          onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+          onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+          + New Record
+        </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats row */}
       <div style={S.statsRow}>
         <div style={S.stat}>
           <div style={S.statNum("var(--primary)")}>{records.length}</div>
@@ -706,209 +517,158 @@ export default function Records() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={S.tabs}>
-        <button style={S.tab(activeTab === "logbook")} onClick={() => setActiveTab("logbook")}>
-          📋 Logbook
-        </button>
-        <button style={S.tab(activeTab === "archive")} onClick={() => setActiveTab("archive")}>
-          🗄 Archive {archiveEntries.length > 0 && `(${archiveEntries.length})`}
-        </button>
+      {/* ── Archive Library Card ─────────────────────────────────────────────── */}
+      <div
+        onClick={() => navigate("/archive")}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: "var(--bg-card)",
+          border: "1.5px solid var(--border-main)",
+          borderLeft: "4px solid #6b6b6b",
+          borderRadius: "8px",
+          padding: "14px 20px",
+          marginBottom: "20px",
+          cursor: "pointer",
+          transition: "box-shadow 0.15s, border-color 0.15s",
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.boxShadow = "var(--shadow-lg)";
+          e.currentTarget.style.borderColor = "#555";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.boxShadow = "none";
+          e.currentTarget.style.borderLeftColor = "#6b6b6b";
+          e.currentTarget.style.borderColor = "var(--border-main)";
+          e.currentTarget.style.borderLeftColor = "#6b6b6b";
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{
+            width: "40px", height: "40px", borderRadius: "8px",
+            background: "#f0f0f0", display: "flex", alignItems: "center",
+            justifyContent: "center", fontSize: "20px", flexShrink: 0,
+          }}>
+            🗄️
+          </div>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", letterSpacing: "0.2px" }}>
+              Archive Library
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
+              View all permanently archived documents
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {/* Archived count badge */}
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "22px", fontWeight: "700", color: "#6b6b6b", lineHeight: 1 }}>
+              {archivedCount}
+            </div>
+            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
+              archived
+            </div>
+          </div>
+          {/* Arrow */}
+          <div style={{ fontSize: "16px", color: "var(--text-muted)" }}>›</div>
+        </div>
       </div>
 
-      {/* ── LOGBOOK TAB ──────────────────────────────────────────────────────── */}
-      {activeTab === "logbook" && (
-        <>
-          <div style={S.filters}>
-            <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
-              <option value="All">All Types</option>
-              <option value="IN">▼ Incoming</option>
-              <option value="OUT">▲ Outgoing</option>
-            </select>
-            <select id="filter-project" name="filter-project" style={S.select} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
-              <option value="All">All Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>
-              ))}
-            </select>
-            <input
-              id="filter-date"
-              name="filter-date"
-              type="date"
-              style={S.dateInput}
-              value={filterDate}
-              onChange={e => setFilterDate(e.target.value)}
-              title="Filter by date"
-            />
-            {hasFilters && (
-              <button style={S.clearBtn} onClick={() => { setFilterType("All"); setFilterProject("All"); setFilterDate(""); }}>
-                ✕ Clear filters
-              </button>
-            )}
-            <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)" }}>
-              {filtered.length} record{filtered.length !== 1 ? "s" : ""}
-            </span>
-          </div>
+      {/* Filters */}
+      <div style={S.filters}>
+        <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <option value="All">All Types</option>
+          <option value="IN">▼ Incoming</option>
+          <option value="OUT">▲ Outgoing</option>
+        </select>
+        <select id="filter-project" name="filter-project" style={S.select} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+          <option value="All">All Projects</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>)}
+        </select>
+        <input id="filter-date" name="filter-date" type="date" style={S.dateInput} value={filterDate} onChange={e => setFilterDate(e.target.value)} title="Filter by date" />
+        {hasFilters && (
+          <button style={S.clearBtn} onClick={() => { setFilterType("All"); setFilterProject("All"); setFilterDate(""); }}>
+            ✕ Clear filters
+          </button>
+        )}
+        <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)" }}>
+          {filtered.length} record{filtered.length !== 1 ? "s" : ""}
+        </span>
+      </div>
 
-          <div style={{ overflowX: "auto" }}>
-            {loading
-              ? <div style={S.empty}>Loading records…</div>
-              : (
-                <table style={S.table}>
-                  <thead>
-                    <tr>
-                      <th style={S.th}>Date</th>
-                      <th style={S.th}>Project</th>
-                      <th style={S.th}>Type</th>
-                      <th style={S.th}>From</th>
-                      <th style={S.th}>To</th>
-                      <th style={S.th}>Department</th>
-                      <th style={S.th}>External Party</th>
-                      <th style={S.th}>Docs</th>
-                      <th style={S.th}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 && (
-                      <tr>
-                        <td colSpan={9} style={{ ...S.td, ...S.empty }}>
-                          {records.length === 0
-                            ? "No records yet. Click '+ New Record' to add the first one."
-                            : "No records match the current filters."}
-                        </td>
-                      </tr>
-                    )}
-                    {filtered.map(r => {
-                      const deptValue   = r.from?.type === "department" ? r.from?.label : r.to?.type === "department" ? r.to?.label : "—";
-                      const externalVal = r.from?.type === "contractor" ? r.from?.label : r.to?.type === "contractor" ? r.to?.label : "—";
-                      const docCount    = r.documents?.length || 0;
-
-                      return (
-                        <tr key={r.id}
-                          onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
-                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                        >
-                          <td style={{ ...S.td, whiteSpace: "nowrap" }}>{formatDate(r.date)}</td>
-                          <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{projectLabel(r.projectId)}</td>
-                          <td style={S.td}><span style={S.typePill(r.type)}>{r.type === "IN" ? "▼ IN" : "▲ OUT"}</span></td>
-                          <td style={S.td}>{r.from?.label || "—"}</td>
-                          <td style={S.td}>{r.to?.label   || "—"}</td>
-                          <td style={S.td}>{deptValue}</td>
-                          <td style={S.td}>{externalVal}</td>
-                          <td style={{ ...S.td, textAlign: "center" }}>
-                            {docCount > 0
-                              ? <span style={{ fontSize: "11px", fontWeight: "600", background: "var(--bg-hover)", border: "1px solid var(--border-main)", borderRadius: "10px", padding: "2px 9px", color: "var(--text-primary)" }}>{docCount}</span>
-                              : <span style={{ color: "var(--text-muted)" }}>—</span>
-                            }
-                          </td>
-                          <td style={S.td}>
-                            <div style={{ display: "flex", gap: "6px" }}>
-                              <button
-                                style={S.actionBtn(false)}
-                                onClick={() => setModal({ mode: "view", record: r })}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                              >View</button>
-                              {adminUser && (
-                                <>
-                                  <button
-                                    style={S.actionBtn(false)}
-                                    onClick={() => setModal({ mode: "edit", record: r })}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-                                  >Edit</button>
-                                  <button
-                                    style={S.actionBtn(true)}
-                                    onClick={() => setDeleteTarget(r)}
-                                    onMouseEnter={e => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--danger)"; }}
-                                  >Del</button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )
-            }
-          </div>
-        </>
-      )}
-
-      {/* ── ARCHIVE TAB ──────────────────────────────────────────────────────── */}
-      {activeTab === "archive" && (
-        <>
-          <ArchiveNotice />
-
-          <div style={{ overflowX: "auto" }}>
-            {archiveLoading
-              ? <div style={S.empty}>Loading archive…</div>
-              : (
-                <table style={S.table}>
-                  <thead>
-                    <tr>
-                      <th style={S.th}>Archived On</th>
-                      <th style={S.th}>Project</th>
-                      <th style={S.th}>Subject</th>
-                      <th style={S.th}>Status at Archive</th>
-                      <th style={S.th}>Archived By</th>
-                      {adminUser && <th style={S.th}>Restore</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {archiveEntries.length === 0 && (
-                      <tr>
-                        <td colSpan={adminUser ? 6 : 5} style={{ ...S.td, ...S.empty }}>
-                          No archived documents yet.
-                        </td>
-                      </tr>
-                    )}
-                    {archiveEntries.map(entry => {
-                      const archivedAt = entry.archivedAt?.toDate?.();
-                      const archivedLabel = archivedAt
-                        ? archivedAt.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
-                        : "—";
-
-                      return (
-                        <tr key={entry.id}
-                          onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
-                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                        >
-                          <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--text-secondary)" }}>{archivedLabel}</td>
-                          <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{projectLabel(entry.projectId)}</td>
-                          <td style={S.td}>{entry.subject || "—"}</td>
-                          <td style={S.td}>
-                            <span style={{ fontSize: "11px", color: "var(--text-secondary)", background: "var(--bg-secondary)", borderRadius: "4px", padding: "2px 8px", border: "1px solid var(--border-light)" }}>
-                              {entry.status || "—"}
-                            </span>
-                          </td>
-                          <td style={{ ...S.td, color: "var(--text-secondary)" }}>{entry.archivedBy || "—"}</td>
-                          {/* Restore — admin only */}
-                          {adminUser && (
-                            <td style={S.td}>
-                              <button
-                                style={S.restoreBtn}
-                                onClick={() => setRestoreTarget(entry)}
-                                onMouseEnter={e => { e.currentTarget.style.background = "var(--primary)"; e.currentTarget.style.color = "#fff"; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--primary)"; }}
-                              >
-                                ↩ Restore
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )
-            }
-          </div>
-        </>
-      )}
+      {/* Table */}
+      <div style={{ overflowX: "auto" }}>
+        {loading ? <div style={S.empty}>Loading records…</div> : (
+          <table style={S.table}>
+            <thead>
+              <tr>
+                <th style={S.th}>Date</th>
+                <th style={S.th}>Project</th>
+                <th style={S.th}>Type</th>
+                <th style={S.th}>From</th>
+                <th style={S.th}>To</th>
+                <th style={S.th}>Department</th>
+                <th style={S.th}>External Party</th>
+                <th style={S.th}>Docs</th>
+                <th style={S.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={9} style={{ ...S.td, ...S.empty }}>
+                    {records.length === 0 ? "No records yet. Click '+ New Record' to add the first one." : "No records match the current filters."}
+                  </td>
+                </tr>
+              )}
+              {filtered.map(r => {
+                const deptValue   = r.from?.type === "department" ? r.from?.label : r.to?.type === "department" ? r.to?.label : "—";
+                const externalVal = r.from?.type === "contractor" ? r.from?.label : r.to?.type === "contractor" ? r.to?.label : "—";
+                const docCount    = r.documents?.length || 0;
+                return (
+                  <tr key={r.id}
+                    onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ ...S.td, whiteSpace: "nowrap" }}>{formatDate(r.date)}</td>
+                    <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{projectLabel(r.projectId)}</td>
+                    <td style={S.td}><span style={S.typePill(r.type)}>{r.type === "IN" ? "▼ IN" : "▲ OUT"}</span></td>
+                    <td style={S.td}>{r.from?.label || "—"}</td>
+                    <td style={S.td}>{r.to?.label   || "—"}</td>
+                    <td style={S.td}>{deptValue}</td>
+                    <td style={S.td}>{externalVal}</td>
+                    <td style={{ ...S.td, textAlign: "center" }}>
+                      {docCount > 0
+                        ? <span style={{ fontSize: "11px", fontWeight: "600", background: "var(--bg-hover)", border: "1px solid var(--border-main)", borderRadius: "10px", padding: "2px 9px", color: "var(--text-primary)" }}>{docCount}</span>
+                        : <span style={{ color: "var(--text-muted)" }}>—</span>
+                      }
+                    </td>
+                    <td style={S.td}>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button style={S.actionBtn(false)} onClick={() => setModal({ mode: "view", record: r })}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}>View</button>
+                        {adminUser && (
+                          <>
+                            <button style={S.actionBtn(false)} onClick={() => setModal({ mode: "edit", record: r })}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}>Edit</button>
+                            <button style={S.actionBtn(true)} onClick={() => setDeleteTarget(r)}
+                              onMouseEnter={e => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--danger)"; }}>Del</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

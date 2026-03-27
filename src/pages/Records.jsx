@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
   collection, query, where, onSnapshot,
-  addDoc, updateDoc, deleteDoc, doc, serverTimestamp
+  addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, arrayUnion,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -35,7 +35,7 @@ function emptyForm() {
   };
 }
 
-// ─── PartyField — reusable From/To selector ───────────────────────────────────
+// ─── PartyField ───────────────────────────────────────────────────────────────
 function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, members, departments }) {
   const type      = form[typeKey];
   const value     = form[valueKey];
@@ -121,13 +121,13 @@ function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, memb
   );
 }
 
-// ─── DocumentRows — add/remove document entries ───────────────────────────────
+// ─── DocumentRows ─────────────────────────────────────────────────────────────
 function DocumentRows({ docs, setForm, readOnly }) {
   const S = {
-    row:     { display: "grid", gridTemplateColumns: "140px 1fr auto", gap: "8px", alignItems: "center", marginBottom: "8px" },
-    input:   { fontSize: "12px", padding: "7px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%", boxSizing: "border-box" },
-    addBtn:  { fontSize: "11px", padding: "6px 14px", borderRadius: "6px", border: "1.5px dashed var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", transition: "all 0.15s" },
-    delBtn:  { background: "none", border: "none", cursor: "pointer", color: "var(--border-input)", fontSize: "16px", padding: "0 4px", lineHeight: 1, transition: "color 0.15s" },
+    row:    { display: "grid", gridTemplateColumns: "140px 1fr auto", gap: "8px", alignItems: "center", marginBottom: "8px" },
+    input:  { fontSize: "12px", padding: "7px 10px", borderRadius: "6px", border: "1.5px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", width: "100%", boxSizing: "border-box" },
+    addBtn: { fontSize: "11px", padding: "6px 14px", borderRadius: "6px", border: "1.5px dashed var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", transition: "all 0.15s" },
+    delBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--border-input)", fontSize: "16px", padding: "0 4px", lineHeight: 1, transition: "color 0.15s" },
   };
 
   function addDoc() {
@@ -182,8 +182,8 @@ function DocumentRows({ docs, setForm, readOnly }) {
 
 // ─── RecordModal — create / edit / view ──────────────────────────────────────
 function RecordModal({ mode, record, projects, members, departments, teamId, userProfile, onClose, onSaved }) {
-  const isView  = mode === "view";
-  const isEdit  = mode === "edit";
+  const isView   = mode === "view";
+  const isEdit   = mode === "edit";
   const isCreate = mode === "create";
 
   const [form, setForm] = useState(() => {
@@ -389,8 +389,8 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
 
           {isView && (
             <div style={{ fontSize: "11px", color: "var(--text-muted)", borderTop: "1px solid var(--border-light)", paddingTop: "12px", display: "flex", gap: "20px", flexWrap: "wrap" }}>
-              {record.createdBy      && <span>Created by <strong>{record.createdBy}</strong></span>}
-              {record.lastModifiedBy && <span>Last edited by <strong>{record.lastModifiedBy}</strong></span>}
+              {record.createdBy       && <span>Created by <strong>{record.createdBy}</strong></span>}
+              {record.lastModifiedBy  && <span>Last edited by <strong>{record.lastModifiedBy}</strong></span>}
             </div>
           )}
 
@@ -442,153 +442,32 @@ function DeleteConfirm({ record, onClose, onConfirm }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ArchiveTab — project folders showing archived documents
-// ═══════════════════════════════════════════════════════════════════════════════
-function ArchiveTab({ archiveRecords, projects }) {
-  const [expandedProjects, setExpandedProjects] = useState({});
-
-  function toggleProject(projectId) {
-    setExpandedProjects(prev => ({ ...prev, [projectId]: !prev[projectId] }));
+// ─── RestoreConfirm modal ─────────────────────────────────────────────────────
+function RestoreConfirm({ entry, onClose, onConfirm }) {
+  const [restoring, setRestoring] = useState(false);
+  async function handleRestore() {
+    setRestoring(true);
+    await onConfirm(entry);
+    setRestoring(false);
+    onClose();
   }
-
-  // Group archive records by projectId
-  const grouped = {};
-  for (const rec of archiveRecords) {
-    const pid = rec.projectId || "__unknown__";
-    if (!grouped[pid]) grouped[pid] = [];
-    grouped[pid].push(rec);
-  }
-
-  // Sort each group by dateLogged desc
-  for (const pid of Object.keys(grouped)) {
-    grouped[pid].sort((a, b) => {
-      if (!a.dateLogged && !b.dateLogged) return 0;
-      if (!a.dateLogged) return 1;
-      if (!b.dateLogged) return -1;
-      return b.dateLogged.localeCompare(a.dateLogged);
-    });
-  }
-
-  const projectIds = Object.keys(grouped);
-
-  const S = {
-    empty: { textAlign: "center", color: "var(--text-disabled)", padding: "48px 20px", fontSize: "13px", fontStyle: "italic" },
-    folder: {
-      background: "var(--bg-card)",
-      border: "0.5px solid var(--border-main)",
-      borderRadius: "8px",
-      marginBottom: "10px",
-      overflow: "hidden",
-    },
-    folderHeader: (open) => ({
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      padding: "12px 16px",
-      cursor: "pointer",
-      background: open ? "var(--bg-secondary)" : "var(--bg-card)",
-      borderBottom: open ? "1px solid var(--border-light)" : "none",
-      userSelect: "none",
-      transition: "background 0.15s",
-    }),
-    folderIcon: { fontSize: "16px" },
-    folderTitle: { fontSize: "13px", fontWeight: "700", color: "var(--primary)", flex: 1 },
-    folderCount: { fontSize: "11px", color: "var(--text-muted)", background: "var(--bg-hover)", borderRadius: "10px", padding: "2px 9px" },
-    chevron: (open) => ({
-      fontSize: "10px",
-      color: "var(--text-muted)",
-      transform: open ? "rotate(180deg)" : "rotate(0deg)",
-      transition: "transform 0.2s",
-    }),
-    table: { width: "100%", borderCollapse: "collapse" },
-    th: { padding: "8px 16px", textAlign: "left", fontSize: "10px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.6px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border-light)" },
-    td: { padding: "10px 16px", fontSize: "12px", color: "var(--text-primary)", borderBottom: "0.5px solid var(--border-light)" },
-    archiveBadge: { display: "inline-block", fontSize: "10px", padding: "2px 8px", borderRadius: "8px", background: "#f5f0ff", color: "#5b2d9a", fontWeight: "600" },
-  };
-
-  if (projectIds.length === 0) {
-    return (
-      <div style={S.empty}>
-        No archived documents yet. Use the "📁 Archive Document" button in any document's details to archive it.
-      </div>
-    );
-  }
-
   return (
-    <div>
-      {/* Summary */}
-      <div style={{ marginBottom: "16px", fontSize: "12px", color: "var(--text-muted)" }}>
-        {archiveRecords.length} archived document{archiveRecords.length !== 1 ? "s" : ""} across {projectIds.length} project{projectIds.length !== 1 ? "s" : ""}
+    <div style={{ position: "fixed", inset: 0, background: "rgba(10,24,40,0.6)", zIndex: 2100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: "12px", padding: "24px 28px", width: "380px", boxShadow: "var(--shadow-lg)", border: "1px solid var(--border-main)" }}>
+        <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--primary)", marginBottom: "10px" }}>Restore Document?</div>
+        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px", lineHeight: "1.6" }}>
+          <strong style={{ color: "var(--text-primary)" }}>{entry.subject || entry.paperId}</strong> will reappear in Documents and Dashboard as an active file.
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "20px", fontStyle: "italic" }}>
+          The archive log entry here will remain as a permanent record.
+        </div>
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ fontSize: "12px", padding: "8px 18px", borderRadius: "7px", border: "1px solid var(--border-input)", background: "var(--bg-secondary)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" }}>Cancel</button>
+          <button onClick={handleRestore} disabled={restoring} style={{ fontSize: "12px", padding: "8px 22px", borderRadius: "7px", border: "none", background: "var(--primary)", color: "#fff", cursor: restoring ? "not-allowed" : "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", opacity: restoring ? 0.7 : 1 }}>
+            {restoring ? "Restoring…" : "Restore"}
+          </button>
+        </div>
       </div>
-
-      {projectIds.map(pid => {
-        const project = projects.find(p => p.id === pid);
-        const label   = project?.projectId || pid;
-        const entries = grouped[pid];
-        const isOpen  = !!expandedProjects[pid];
-
-        return (
-          <div key={pid} style={S.folder}>
-            {/* Folder header */}
-            <div
-              style={S.folderHeader(isOpen)}
-              onClick={() => toggleProject(pid)}
-              onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "var(--bg-card)"; }}
-            >
-              <span style={S.folderIcon}>{isOpen ? "📂" : "📁"}</span>
-              <span style={S.folderTitle}>{label}</span>
-              {project?.projectName && (
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{project.projectName}</span>
-              )}
-              <span style={S.folderCount}>{entries.length} document{entries.length !== 1 ? "s" : ""}</span>
-              <span style={S.chevron(isOpen)}>▼</span>
-            </div>
-
-            {/* Folder contents */}
-            {isOpen && (
-              <table style={S.table}>
-                <thead>
-                  <tr>
-                    <th style={S.th}>Date Logged</th>
-                    <th style={S.th}>Subject / Document</th>
-                    <th style={S.th}>Received By</th>
-                    <th style={S.th}>Archived By</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map(rec => (
-                    <tr key={rec.id}
-                      onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--text-secondary)" }}>
-                        {formatDate(rec.dateLogged)}
-                      </td>
-                      <td style={S.td}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={S.archiveBadge}>ARCHIVED</span>
-                          <span style={{ fontWeight: "500" }}>{rec.subject || "—"}</span>
-                        </div>
-                      </td>
-                      <td style={S.td}>{rec.receivedBy || "—"}</td>
-                      <td style={{ ...S.td, fontSize: "11px", color: "var(--text-muted)" }}>
-                        {rec.archivedBy || "—"}
-                        {rec.archivedAt && (
-                          <div style={{ fontSize: "10px", marginTop: "2px" }}>
-                            {new Date(rec.archivedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -600,30 +479,37 @@ export default function Records() {
   const { userProfile }            = useAuth();
   const { team, members, isAdmin } = useTeam();
 
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState("logbook"); // "logbook" | "archive"
+
+  // ── Logbook state ──────────────────────────────────────────────────────────
   const [records,   setRecords]   = useState([]);
   const [projects,  setProjects]  = useState([]);
   const [loading,   setLoading]   = useState(true);
 
-  // Sub-tab: "logbook" | "archive"
-  const [activeTab, setActiveTab] = useState("logbook");
+  // ── Archive state ──────────────────────────────────────────────────────────
+  const [archiveEntries, setArchiveEntries] = useState([]);
+  const [archiveLoading, setArchiveLoading] = useState(true);
 
-  // Filters
+  // ── Filters ────────────────────────────────────────────────────────────────
   const [filterType,    setFilterType]    = useState("All");
   const [filterProject, setFilterProject] = useState("All");
   const [filterDate,    setFilterDate]    = useState("");
 
-  // Modals
-  const [modal,        setModal]        = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  // ── Modals ─────────────────────────────────────────────────────────────────
+  const [modal,         setModal]         = useState(null);
+  const [deleteTarget,  setDeleteTarget]  = useState(null);
+  const [restoreTarget, setRestoreTarget] = useState(null);
 
   const departments = team?.departments || [];
 
-  // ── Firestore listeners ────────────────────────────────────────────────────
+  // ── Firestore: logbook records ─────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(
       collection(db, "records"),
-      where("teamId", "==", userProfile.teamId)
+      where("teamId", "==", userProfile.teamId),
+      orderBy("date", "desc")
     );
     const unsub = onSnapshot(q, snap => {
       setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -632,27 +518,55 @@ export default function Records() {
     return unsub;
   }, [userProfile?.teamId]);
 
+  // ── Firestore: archive entries ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!userProfile?.teamId) return;
+    const q = query(
+      collection(db, "archive"),
+      where("teamId", "==", userProfile.teamId),
+      orderBy("archivedAt", "desc")
+    );
+    const unsub = onSnapshot(q, snap => {
+      setArchiveEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setArchiveLoading(false);
+    });
+    return unsub;
+  }, [userProfile?.teamId]);
+
+  // ── Firestore: projects ────────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = collection(db, "teams", userProfile.teamId, "projects");
     return onSnapshot(q, snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, [userProfile?.teamId]);
 
-  // ── Split records into logbook vs archive ──────────────────────────────────
-  const logbookRecords = records.filter(r => r.type !== "ARCHIVE");
-  const archiveRecords = records.filter(r => r.type === "ARCHIVE");
-
   // ── Filtered logbook records ───────────────────────────────────────────────
-  const filteredLogbook = logbookRecords.filter(r => {
+  const filtered = records.filter(r => {
     if (filterType    !== "All" && r.type      !== filterType)    return false;
     if (filterProject !== "All" && r.projectId !== filterProject) return false;
     if (filterDate    && r.date !== filterDate)                   return false;
     return true;
   });
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
+  // ── Delete logbook record ──────────────────────────────────────────────────
   async function handleDelete(id) {
     await deleteDoc(doc(db, "records", id));
+  }
+
+  // ── Restore archived document ──────────────────────────────────────────────
+  // Sets archived: false on the paper, logs "Restored". Archive entry stays.
+  async function handleRestore(entry) {
+    if (!entry.paperId) return;
+    await updateDoc(doc(db, "papers", entry.paperId), {
+      archived: false,
+      lastModifiedAt: serverTimestamp(),
+      lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
+      activityLog: arrayUnion({
+        text: `Restored by ${userProfile.displayName || userProfile.email}`,
+        by:   userProfile.displayName || userProfile.email,
+        at:   new Date().toISOString(),
+      }),
+    });
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -664,46 +578,25 @@ export default function Records() {
   const adminUser  = isAdmin();
   const hasFilters = filterType !== "All" || filterProject !== "All" || filterDate !== "";
 
-  const totalIn  = logbookRecords.filter(r => r.type === "IN").length;
-  const totalOut = logbookRecords.filter(r => r.type === "OUT").length;
-
   const S = {
     page:     { fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", background: "var(--bg-page)", minHeight: "100vh", padding: "20px" },
     header:   { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
     title:    { fontSize: "18px", fontWeight: "600", color: "var(--text-primary)" },
     subtitle: { fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" },
-
-    // Sub-tabs
-    tabBar:   { display: "flex", gap: "0", marginBottom: "20px", borderBottom: "2px solid var(--border-main)" },
-    tab: (active) => ({
-      fontSize: "13px",
-      fontWeight: active ? "700" : "500",
-      color: active ? "var(--primary)" : "var(--text-secondary)",
-      padding: "8px 20px",
-      cursor: "pointer",
-      background: "none",
-      border: "none",
-      borderBottom: active ? "2px solid var(--primary)" : "2px solid transparent",
-      marginBottom: "-2px",
-      fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
-      transition: "color 0.15s",
-      display: "flex",
-      alignItems: "center",
-      gap: "6px",
-    }),
-    tabBadge: (active) => ({
-      fontSize: "10px",
-      fontWeight: "600",
-      padding: "1px 7px",
-      borderRadius: "10px",
-      background: active ? "var(--primary)" : "var(--bg-hover)",
-      color: active ? "#fff" : "var(--text-muted)",
-    }),
-
     statsRow: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" },
     stat:     { background: "var(--bg-card)", border: "0.5px solid var(--border-main)", borderRadius: "8px", padding: "14px", textAlign: "center" },
     statNum:  (c) => ({ fontSize: "26px", fontWeight: "700", color: c || "var(--text-primary)" }),
     statLbl:  { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" },
+    tabs:     { display: "flex", gap: "2px", marginBottom: "20px", background: "var(--bg-hover)", borderRadius: "8px", padding: "3px", border: "1px solid var(--border-main)", width: "fit-content" },
+    tab:      (active) => ({
+      fontSize: "12px", padding: "7px 18px", borderRadius: "6px", cursor: "pointer",
+      border: "none", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
+      fontWeight: active ? "700" : "500",
+      background: active ? "var(--bg-card)" : "transparent",
+      color: active ? "var(--primary)" : "var(--text-secondary)",
+      boxShadow: active ? "var(--shadow-sm)" : "none",
+      transition: "all 0.15s",
+    }),
     filters:  { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" },
     select:   { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
     dateInput:{ fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
@@ -724,9 +617,28 @@ export default function Records() {
       fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
       transition: "all 0.15s",
     }),
+    restoreBtn: {
+      fontSize: "11px", padding: "4px 10px", borderRadius: "5px", cursor: "pointer",
+      border: "1px solid var(--primary)",
+      background: "transparent",
+      color: "var(--primary)",
+      fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
+      transition: "all 0.15s",
+    },
     empty:    { textAlign: "center", color: "var(--text-disabled)", padding: "48px 20px", fontSize: "13px", fontStyle: "italic" },
     clearBtn: { fontSize: "11px", padding: "5px 12px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
   };
+
+  const totalIn  = records.filter(r => r.type === "IN").length;
+  const totalOut = records.filter(r => r.type === "OUT").length;
+
+  // ── Archive tab notice ─────────────────────────────────────────────────────
+  const ArchiveNotice = () => (
+    <div style={{ fontSize: "12px", color: "var(--text-secondary)", background: "var(--bg-hover)", border: "1px solid var(--border-main)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+      <span style={{ fontSize: "16px" }}>🗄</span>
+      <span>Archive entries are a permanent log. They cannot be edited or deleted.{adminUser ? " Admins can restore a document to make it active again." : ""}</span>
+    </div>
+  );
 
   return (
     <div style={S.page}>
@@ -752,16 +664,19 @@ export default function Records() {
           onConfirm={handleDelete}
         />
       )}
+      {restoreTarget && (
+        <RestoreConfirm
+          entry={restoreTarget}
+          onClose={() => setRestoreTarget(null)}
+          onConfirm={handleRestore}
+        />
+      )}
 
       {/* Header */}
       <div style={S.header}>
         <div>
           <div style={S.title}>Records</div>
-          <div style={S.subtitle}>
-            {activeTab === "logbook"
-              ? "Logbook of all incoming and outgoing documents"
-              : "Documents submitted to the Archive department"}
-          </div>
+          <div style={S.subtitle}>Logbook of all incoming and outgoing documents</div>
         </div>
         {activeTab === "logbook" && (
           <button
@@ -775,38 +690,35 @@ export default function Records() {
         )}
       </div>
 
-      {/* Sub-tabs */}
-      <div style={S.tabBar}>
+      {/* Stats */}
+      <div style={S.statsRow}>
+        <div style={S.stat}>
+          <div style={S.statNum("var(--primary)")}>{records.length}</div>
+          <div style={S.statLbl}>Total Records</div>
+        </div>
+        <div style={S.stat}>
+          <div style={S.statNum("#1a7a38")}>{totalIn}</div>
+          <div style={S.statLbl}>Incoming</div>
+        </div>
+        <div style={S.stat}>
+          <div style={S.statNum("#b45309")}>{totalOut}</div>
+          <div style={S.statLbl}>Outgoing</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={S.tabs}>
         <button style={S.tab(activeTab === "logbook")} onClick={() => setActiveTab("logbook")}>
-          Logbook
-          <span style={S.tabBadge(activeTab === "logbook")}>{logbookRecords.length}</span>
+          📋 Logbook
         </button>
         <button style={S.tab(activeTab === "archive")} onClick={() => setActiveTab("archive")}>
-          📁 Archive
-          <span style={S.tabBadge(activeTab === "archive")}>{archiveRecords.length}</span>
+          🗄 Archive {archiveEntries.length > 0 && `(${archiveEntries.length})`}
         </button>
       </div>
 
-      {/* ── LOGBOOK TAB ─────────────────────────────────────────────────────── */}
+      {/* ── LOGBOOK TAB ──────────────────────────────────────────────────────── */}
       {activeTab === "logbook" && (
         <>
-          {/* Stats */}
-          <div style={S.statsRow}>
-            <div style={S.stat}>
-              <div style={S.statNum("var(--primary)")}>{logbookRecords.length}</div>
-              <div style={S.statLbl}>Total Records</div>
-            </div>
-            <div style={S.stat}>
-              <div style={S.statNum("#1a7a38")}>{totalIn}</div>
-              <div style={S.statLbl}>Incoming</div>
-            </div>
-            <div style={S.stat}>
-              <div style={S.statNum("#b45309")}>{totalOut}</div>
-              <div style={S.statLbl}>Outgoing</div>
-            </div>
-          </div>
-
-          {/* Filters */}
           <div style={S.filters}>
             <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
               <option value="All">All Types</option>
@@ -834,11 +746,10 @@ export default function Records() {
               </button>
             )}
             <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-muted)" }}>
-              {filteredLogbook.length} record{filteredLogbook.length !== 1 ? "s" : ""}
+              {filtered.length} record{filtered.length !== 1 ? "s" : ""}
             </span>
           </div>
 
-          {/* Table */}
           <div style={{ overflowX: "auto" }}>
             {loading
               ? <div style={S.empty}>Loading records…</div>
@@ -858,16 +769,16 @@ export default function Records() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredLogbook.length === 0 && (
+                    {filtered.length === 0 && (
                       <tr>
                         <td colSpan={9} style={{ ...S.td, ...S.empty }}>
-                          {logbookRecords.length === 0
+                          {records.length === 0
                             ? "No records yet. Click '+ New Record' to add the first one."
                             : "No records match the current filters."}
                         </td>
                       </tr>
                     )}
-                    {filteredLogbook.map(r => {
+                    {filtered.map(r => {
                       const deptValue   = r.from?.type === "department" ? r.from?.label : r.to?.type === "department" ? r.to?.label : "—";
                       const externalVal = r.from?.type === "contractor" ? r.from?.label : r.to?.type === "contractor" ? r.to?.label : "—";
                       const docCount    = r.documents?.length || 0;
@@ -927,11 +838,76 @@ export default function Records() {
         </>
       )}
 
-      {/* ── ARCHIVE TAB ─────────────────────────────────────────────────────── */}
+      {/* ── ARCHIVE TAB ──────────────────────────────────────────────────────── */}
       {activeTab === "archive" && (
-        loading
-          ? <div style={S.empty}>Loading archive…</div>
-          : <ArchiveTab archiveRecords={archiveRecords} projects={projects} />
+        <>
+          <ArchiveNotice />
+
+          <div style={{ overflowX: "auto" }}>
+            {archiveLoading
+              ? <div style={S.empty}>Loading archive…</div>
+              : (
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Archived On</th>
+                      <th style={S.th}>Project</th>
+                      <th style={S.th}>Subject</th>
+                      <th style={S.th}>Status at Archive</th>
+                      <th style={S.th}>Archived By</th>
+                      {adminUser && <th style={S.th}>Restore</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archiveEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={adminUser ? 6 : 5} style={{ ...S.td, ...S.empty }}>
+                          No archived documents yet.
+                        </td>
+                      </tr>
+                    )}
+                    {archiveEntries.map(entry => {
+                      const archivedAt = entry.archivedAt?.toDate?.();
+                      const archivedLabel = archivedAt
+                        ? archivedAt.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+                        : "—";
+
+                      return (
+                        <tr key={entry.id}
+                          onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                        >
+                          <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--text-secondary)" }}>{archivedLabel}</td>
+                          <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{projectLabel(entry.projectId)}</td>
+                          <td style={S.td}>{entry.subject || "—"}</td>
+                          <td style={S.td}>
+                            <span style={{ fontSize: "11px", color: "var(--text-secondary)", background: "var(--bg-secondary)", borderRadius: "4px", padding: "2px 8px", border: "1px solid var(--border-light)" }}>
+                              {entry.status || "—"}
+                            </span>
+                          </td>
+                          <td style={{ ...S.td, color: "var(--text-secondary)" }}>{entry.archivedBy || "—"}</td>
+                          {/* Restore — admin only */}
+                          {adminUser && (
+                            <td style={S.td}>
+                              <button
+                                style={S.restoreBtn}
+                                onClick={() => setRestoreTarget(entry)}
+                                onMouseEnter={e => { e.currentTarget.style.background = "var(--primary)"; e.currentTarget.style.color = "#fff"; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--primary)"; }}
+                              >
+                                ↩ Restore
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )
+            }
+          </div>
+        </>
       )}
     </div>
   );

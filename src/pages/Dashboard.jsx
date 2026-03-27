@@ -126,32 +126,23 @@ function getRemarksText(doc) {
 }
 
 // ─── Smart relative timestamp label ──────────────────────────────────────────
-// Returns an object: { label, isNew } where isNew = true if this was a fresh addDoc
 function getActivityLabel(d) {
-  // Prefer lastModifiedAt; fall back to createdAt; fall back to lastUpdatedAt (legacy field name)
   const modTs  = d.lastModifiedAt?.toDate?.() || null;
   const crtTs  = d.createdAt?.toDate?.()      || null;
-  const legTs  = d.lastUpdatedAt?.toDate?.()  || null; // backwards compat for existing docs
+  const legTs  = d.lastUpdatedAt?.toDate?.()  || null;
 
-  // Determine if this document was just newly added (no modifier yet means it was never edited after creation)
-  // We treat it as "new" if lastModifiedBy equals createdBy AND the timestamps are within 5 seconds of each other
-  // OR if there's no lastModifiedBy but there is a createdBy (legacy doc not yet touched)
   const effectiveTs = modTs || legTs || crtTs;
   if (!effectiveTs) return null;
 
   const by     = d.lastModifiedBy || null;
   const crtBy  = d.createdBy      || null;
 
-  // Determine label type: "Added" vs "Updated"
-  // A doc is "Added" if it has never been modified after creation.
-  // We detect this by checking if lastModifiedBy is absent (old docs) or if
-  // lastModifiedBy === createdBy AND |lastModifiedAt - createdAt| < 10 seconds
   let isNew = false;
   if (!by && crtBy) {
-    isNew = true; // old doc, never had a modifier written — treat as "Added"
+    isNew = true;
   } else if (by && crtBy && by === crtBy && modTs && crtTs) {
     const diffMs = Math.abs(modTs.getTime() - crtTs.getTime());
-    isNew = diffMs < 10000; // within 10s means it's the creation write
+    isNew = diffMs < 10000;
   }
 
   const now      = new Date();
@@ -163,7 +154,6 @@ function getActivityLabel(d) {
 
   let timeLabel;
   if (tsStr === todayStr) {
-    // Show time for today
     const time = effectiveTs.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", hour12: true });
     timeLabel = `today at ${time}`;
   } else if (tsStr === yesterdayStr) {
@@ -178,7 +168,7 @@ function getActivityLabel(d) {
   return { label, isNew, ts: effectiveTs };
 }
 
-// ─── Status Hover Card — fully theme-aware ────────────────────────────────────
+// ─── Status Hover Card ────────────────────────────────────────────────────────
 function StatusHoverCard({ content, onUpdateStatus, onMouseEnter, onMouseLeave }) {
   const [btnHover, setBtnHover] = useState(false);
 
@@ -655,7 +645,6 @@ function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setI
           Printing <strong style={{ color: "var(--text-primary)" }}>{filteredCount}</strong> document{filteredCount !== 1 ? "s" : ""} based on your current filters and sort.
         </div>
 
-        {/* Include Remarks toggle */}
         <div
           onClick={() => setIncludeRemarks(!includeRemarks)}
           style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "14px", borderRadius: "10px", cursor: "pointer", border: `1.5px solid ${includeRemarks ? "var(--primary)" : "var(--border-main)"}`, background: includeRemarks ? "var(--primary-light)" : "var(--bg-hover)", marginBottom: "10px", transition: "all 0.15s ease" }}
@@ -669,7 +658,6 @@ function PrintModal({ onClose, onBrowserPrint, onExportPDF, includeRemarks, setI
           </div>
         </div>
 
-        {/* Include Last Updated By toggle */}
         <div
           onClick={() => setIncludeLastUpdated(!includeLastUpdated)}
           style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "14px", borderRadius: "10px", cursor: "pointer", border: `1.5px solid ${includeLastUpdated ? "var(--primary)" : "var(--border-main)"}`, background: includeLastUpdated ? "var(--primary-light)" : "var(--bg-hover)", marginBottom: "20px", transition: "all 0.15s ease" }}
@@ -759,7 +747,12 @@ export default function Dashboard() {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
     return onSnapshot(q, (snap) =>
-      setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !!d.projectId))
+      setDocuments(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          // Only show docs that have a projectId, are not hidden, and are not archived
+          .filter((d) => !!d.projectId && !d.hidden && !d.archived)
+      )
     );
   }, [userProfile?.teamId]);
 
@@ -777,9 +770,6 @@ export default function Dashboard() {
   const assignedMemberIds = [...new Set(documents.map((d) => d.assignedTo).filter(Boolean))];
   const assignedMembers   = (members || []).filter((m) => assignedMemberIds.includes(m.uid || m.id));
 
-  // ─── Sorting logic ──────────────────────────────────────────────────────────
-  // Default (sortOrder === "none") = most recently modified first.
-  // A→Z / Z→A = sort by project ID label, same as before.
   const filtered = documents
     .filter((d) =>
       (filterStatus === "All" || d.status    === filterStatus) &&
@@ -795,8 +785,6 @@ export default function Dashboard() {
         const c  = lA.localeCompare(lB, undefined, { numeric: true, sensitivity: "base" });
         return sortOrder === "asc" ? c : -c;
       }
-      // Default: most recently modified first
-      // Fall back chain: lastModifiedAt → lastUpdatedAt (legacy) → createdAt → 0
       const tsA = a.lastModifiedAt?.toMillis?.() || a.lastUpdatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
       const tsB = b.lastModifiedAt?.toMillis?.() || b.lastUpdatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
       return tsB - tsA;
@@ -911,7 +899,6 @@ export default function Dashboard() {
     divider:   { width: "1px", height: "20px", background: "var(--border-main)", margin: "0 2px" },
   };
 
-  // ─── Print card renderer (used in hidden printable area) ──────────────────
   const renderCard = (d, i) => {
     const project     = projects.find((p) => p.id === d.projectId);
     const pidLabel    = project?.projectId || d.projectId || "—";
@@ -949,7 +936,6 @@ export default function Dashboard() {
             ? <div style={{ fontSize: "12px", color: "#1a3a5c", lineHeight: "1.5" }}>{remarksText}</div>
             : <div style={{ fontSize: "11px", color: "#bbb", fontStyle: "italic" }}>No remarks.</div>}
         </div>
-        {/* Last updated line — only shown in print if toggle is on */}
         {includeLastUpdated && activity && (
           <div style={{ marginTop: "8px", fontSize: "10px", color: "#8a9ab0", fontStyle: "italic", borderTop: "1px dashed #dde6f0", paddingTop: "6px" }}>
             🕒 {activity.label}
@@ -990,7 +976,7 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Hidden printable area — always white for PDF legibility */}
+      {/* Hidden printable area */}
       <div style={{ position: "absolute", left: "-9999px", top: 0, width: "794px" }}>
         <div ref={printRef} style={{ fontFamily: "Tahoma, Geneva, sans-serif", background: "#fff" }}>
           <div data-pdf-header style={{ padding: "28px 32px 0" }}>
@@ -1123,7 +1109,6 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Sort hint — only show when default sort is active */}
       {sortOrder === "none" && (
         <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "10px", fontStyle: "italic" }}>
           🕒 Sorted by most recently updated — documents with recent changes appear first.
@@ -1167,7 +1152,6 @@ export default function Dashboard() {
                     {assigned && <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginTop: "2px" }}>{assigned.displayName}</div>}
                   </td>
                   <td style={S.td}>
-                    {/* Status pill + activity label side by side */}
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                       <span
                         style={{ ...S.pill(d.status), borderBottom: hasRemarks ? "1.5px dashed currentColor" : "none", paddingBottom: hasRemarks ? "2px" : "3px", cursor: "default" }}
@@ -1176,7 +1160,6 @@ export default function Dashboard() {
                       >
                         {d.status}
                       </span>
-                      {/* Recently Updated label */}
                       {activity && (
                         <span style={{
                           fontSize: "10px",

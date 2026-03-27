@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import {
   collection, query, where, onSnapshot,
   addDoc, updateDoc, deleteDoc, doc,
-  serverTimestamp, arrayUnion,
+  serverTimestamp, arrayUnion, getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -190,84 +190,13 @@ function LackingItem({ item, isCustom, onToggle, onRemove }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ArchiveModal — fill in archive details before marking a doc as archived
-// ═══════════════════════════════════════════════════════════════════════════════
-function ArchiveModal({ document: d, userProfile, onConfirm, onClose }) {
-  const [dateLogged,    setDateLogged]    = useState(new Date().toISOString().slice(0, 10));
-  const [receivedBy,    setReceivedBy]    = useState("");
-  const [saving,        setSaving]        = useState(false);
-  const [error,         setError]         = useState("");
-
-  async function handleConfirm() {
-    if (!dateLogged)   return setError("Date logged is required.");
-    if (!receivedBy.trim()) return setError("Please enter who received it.");
-    setSaving(true);
-    setError("");
-    await onConfirm({ dateLogged, receivedBy: receivedBy.trim() });
-    setSaving(false);
-  }
-
-  return (
-    <div style={{ ...S.modal, zIndex: 600 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ ...S.mBox, maxWidth: "420px" }}>
-        <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>
-          📁 Mark as Archived
-        </div>
-        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "18px", lineHeight: "1.6" }}>
-          <strong style={{ color: "var(--text-primary)" }}>{d.subject}</strong> will be hidden from the main document list and logged in the Archive.
-        </div>
-
-        <label style={S.label}>Date Logged at Archive *</label>
-        <input
-          style={{ ...S.input, marginBottom: "14px" }}
-          type="date"
-          value={dateLogged}
-          onChange={(e) => setDateLogged(e.target.value)}
-        />
-
-        <label style={S.label}>Received by (Archive dept) *</label>
-        <input
-          style={{ ...S.input, marginBottom: "6px" }}
-          placeholder="Name of person who received it"
-          value={receivedBy}
-          onChange={(e) => setReceivedBy(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleConfirm(); }}
-          autoFocus
-        />
-        <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "16px" }}>
-          Archived by: <strong>{userProfile.displayName || userProfile.email}</strong>
-        </div>
-
-        {error && (
-          <div style={{ fontSize: "12px", color: "var(--danger)", background: "#fcebeb", border: "1px solid var(--danger)", borderRadius: "6px", padding: "8px 12px", marginBottom: "14px" }}>
-            {error}
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-          <button style={S.btn(false)} onClick={onClose}>Cancel</button>
-          <button
-            style={{ ...S.btn(true), background: "#5b2d9a", borderColor: "#5b2d9a" }}
-            onClick={handleConfirm}
-            disabled={saving}
-          >
-            {saving ? "Archiving…" : "Confirm Archive"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // DetailsPanel
 // ═══════════════════════════════════════════════════════════════════════════════
 function DetailsPanel({
   document: d, statuses, members, adminMode,
   onStatusChange, onSaveDetails, onToggleLacking,
   onRemoveLackingItem, onClearCompleted,
-  onAddCustomItem, onAssignMember, onDelete,
-  onArchive,
+  onAddCustomItem, onAssignMember, onDelete, onArchive,
 }) {
   const { status } = d;
   const key = toKey(status);
@@ -275,11 +204,19 @@ function DetailsPanel({
   const [localData, setLocalData] = useState(() => d.statusDetails?.[key] || {});
   const [newItem,   setNewItem]   = useState("");
   const [saving,    setSaving]    = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => { ensureDrainStyle(); }, []);
   useEffect(() => { setLocalData(d.statusDetails?.[toKey(d.status)] || {}); }, [d.id, d.status, JSON.stringify(d.statusDetails)]);
 
   async function handleSave() { setSaving(true); await onSaveDetails(status, localData); setSaving(false); }
+
+  async function handleArchive() {
+    if (!window.confirm(`Archive "${d.subject}"? It will be hidden from Documents and Dashboard. The archive entry in Records will remain as a permanent log.`)) return;
+    setArchiving(true);
+    await onArchive();
+    setArchiving(false);
+  }
 
   const lacking  = d.statusDetails?.["LACKING"] || { items: [], customItems: [] };
   const allItems = [...(lacking.items || []), ...(lacking.customItems || [])];
@@ -431,27 +368,29 @@ function DetailsPanel({
         </div>
       )}
 
-      {/* ── Archive + Delete actions ─────────────────────────────────────── */}
-      <div style={S.divider} />
-      <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-        {/* Archive button — available to all members */}
-        <button
-          style={{
-            ...S.smBtn(false, false),
-            border: "1px solid #5b2d9a",
-            color: "#5b2d9a",
-            display: "flex", alignItems: "center", gap: "5px",
-          }}
-          onClick={onArchive}
-          title="Move this document to the Archive"
-        >
-          📁 Archive Document
-        </button>
-
-        {adminMode && (
-          <button style={S.smBtn(false, true)} onClick={onDelete}>Delete Document</button>
-        )}
-      </div>
+      {adminMode && (
+        <>
+          <div style={S.divider} />
+          {/* Archive button — admin only */}
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              style={{
+                ...S.smBtn(false, false),
+                border: "1px solid var(--warning, #d97706)",
+                color: "var(--warning, #d97706)",
+                opacity: archiving ? 0.6 : 1,
+                cursor: archiving ? "not-allowed" : "pointer",
+              }}
+              onClick={handleArchive}
+              disabled={archiving}
+              title="Hide this document from Documents and Dashboard. The archive log entry in Records will remain."
+            >
+              {archiving ? "Archiving…" : "🗄 Archive"}
+            </button>
+            <button style={S.smBtn(false, true)} onClick={onDelete}>Delete Document</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -556,10 +495,6 @@ export default function Documents() {
   const [filterProj,   setFilterProj]   = useState("All");
   const [form,         setForm]         = useState(BLANK_FORM);
 
-  // Archive
-  const [archiveTarget,  setArchiveTarget]  = useState(null); // doc to archive
-  const [showArchived,   setShowArchived]   = useState(false); // admin restore toggle
-
   const pendingScrollId = useRef(null);
 
   useEffect(() => {
@@ -575,7 +510,14 @@ export default function Documents() {
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
-    return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return onSnapshot(q, (snap) =>
+      // Filter out archived documents — they are invisible in Documents tab
+      setDocuments(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((d) => !d.archived)
+      )
+    );
   }, [userProfile?.teamId]);
 
   useEffect(() => {
@@ -625,6 +567,7 @@ export default function Documents() {
       createdBy: userProfile.displayName || userProfile.email || "Unknown",
       lastModifiedAt: serverTimestamp(),
       lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
+      archived: false,
       activityLog: [{ text: `Document created by ${userProfile.displayName}`, by: userProfile.displayName, at: new Date().toISOString() }],
     });
     setShowForm(false);
@@ -703,111 +646,59 @@ export default function Documents() {
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
-  // ── Archive handler ────────────────────────────────────────────────────────
-  async function handleArchiveConfirm(docId, { dateLogged, receivedBy }) {
-    const archivedBy   = userProfile.displayName || userProfile.email || "Unknown";
-    const archivedAt   = new Date().toISOString();
+  // ─── Archive ───────────────────────────────────────────────────────────────
+  // Marks paper as archived (hidden from Documents + Dashboard).
+  // Writes one entry to the `archive` collection per paperId — skips if already exists.
+  async function handleArchive(currentDoc) {
+    const paperId = currentDoc.id;
 
-    // 1. Update the paper: mark ARCHIVED + hidden
-    await updateDoc(doc(db, "papers", docId), {
-      status:     "ARCHIVED",
-      hidden:     true,
-      archivedAt,
-      archivedBy,
-      archiveDetails: { dateLogged, receivedBy },
-      ...modifierFields(),
-      activityLog: arrayUnion({
-        text: `Archived by ${archivedBy} — received by ${receivedBy} on ${dateLogged}`,
-        by:   archivedBy,
-        at:   archivedAt,
-      }),
-    });
-
-    // 2. Create the ARCHIVE record in the records collection
-    const paper = documents.find((d) => d.id === docId);
-    if (paper) {
-      await addDoc(collection(db, "records"), {
-        teamId:    userProfile.teamId,
-        type:      "ARCHIVE",
-        projectId: paper.projectId,
-        paperId:   docId,
-        subject:   paper.subject,
-        dateLogged,
-        receivedBy,
-        archivedBy,
-        archivedAt,
-        createdAt: serverTimestamp(),
-        createdBy: archivedBy,
+    // Duplicate prevention: check if archive entry already exists for this paperId
+    const existingQ = query(
+      collection(db, "archive"),
+      where("paperId", "==", paperId),
+      where("teamId",  "==", userProfile.teamId)
+    );
+    const existingSnap = await getDocs(existingQ);
+    if (existingSnap.empty) {
+      await addDoc(collection(db, "archive"), {
+        paperId,
+        teamId:      userProfile.teamId,
+        subject:     currentDoc.subject     || "",
+        projectId:   currentDoc.projectId   || "",
+        status:      currentDoc.status      || "",
+        archivedAt:  serverTimestamp(),
+        archivedBy:  userProfile.displayName || userProfile.email || "Unknown",
       });
     }
 
-    setArchiveTarget(null);
-    setExpanded((prev) => { const n = { ...prev }; delete n[docId]; return n; });
-  }
-
-  // ── Restore handler (admin only) ───────────────────────────────────────────
-  async function handleRestore(docId) {
-    if (!window.confirm("Restore this document? It will reappear in the main list.")) return;
-    await updateDoc(doc(db, "papers", docId), {
-      status:         "PRECOMPILING",
-      hidden:         false,
-      archivedAt:     null,
-      archivedBy:     null,
-      archiveDetails: null,
+    // Mark paper as archived and log it
+    await updateDoc(doc(db, "papers", paperId), {
+      archived: true,
       ...modifierFields(),
       activityLog: arrayUnion({
-        text: `Restored from Archive by ${userProfile.displayName || userProfile.email}`,
-        by:   userProfile.displayName || userProfile.email,
-        at:   new Date().toISOString(),
+        text: `Archived by ${userProfile.displayName}`,
+        by: userProfile.displayName,
+        at: new Date().toISOString(),
       }),
     });
+
+    // Close the expanded row
+    setExpanded((prev) => { const n = { ...prev }; delete n[paperId]; return n; });
   }
 
-  // ── Filtered list ──────────────────────────────────────────────────────────
-  // Normal view: hide archived docs unless admin has toggled showArchived
-  const filtered = documents.filter((d) => {
-    if (d.hidden && !showArchived) return false;
-    if (!d.projectId) return false;
-    if (filterStatus !== "All" && d.status !== filterStatus) return false;
-    if (filterProj   !== "All" && d.projectId !== filterProj) return false;
-    return true;
-  });
+  const filtered = documents.filter(
+    (d) => d.projectId &&
+      (filterStatus === "All" || d.status === filterStatus) &&
+      (filterProj   === "All" || d.projectId === filterProj)
+  );
 
   const admin = isAdmin();
-  const archivedCount = documents.filter((d) => d.hidden).length;
 
   return (
     <div style={S.page}>
-      {/* Archive modal */}
-      {archiveTarget && (
-        <ArchiveModal
-          document={archiveTarget}
-          userProfile={userProfile}
-          onConfirm={(details) => handleArchiveConfirm(archiveTarget.id, details)}
-          onClose={() => setArchiveTarget(null)}
-        />
-      )}
-
       <div style={S.header}>
         <div style={S.pageTitle}>Documents</div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          {/* Admin restore toggle */}
-          {admin && archivedCount > 0 && (
-            <button
-              style={{
-                ...S.btn(false, false),
-                border: showArchived ? "1px solid #5b2d9a" : "1px solid var(--border-input)",
-                color:  showArchived ? "#5b2d9a" : "var(--text-secondary)",
-                fontSize: "11px",
-              }}
-              onClick={() => setShowArchived((v) => !v)}
-              title="Show archived documents (admin only)"
-            >
-              {showArchived ? "📁 Hide Archived" : `📁 Show Archived (${archivedCount})`}
-            </button>
-          )}
-          <button style={S.btn(true)} onClick={() => setShowForm(true)}>+ Add Document</button>
-        </div>
+        <button style={S.btn(true)} onClick={() => setShowForm(true)}>+ Add Document</button>
       </div>
 
       <div style={S.filters}>
@@ -837,72 +728,32 @@ export default function Documents() {
               <tr><td colSpan={5} style={{ ...S.td, textAlign: "center", color: "var(--text-disabled)", padding: "40px" }}>No documents found.</td></tr>
             )}
             {filtered.map((d) => {
-              const project  = projects.find((p) => p.id === d.projectId);
-              const isOpen   = !!expanded[d.id];
-              const isArchived = d.hidden === true;
-
+              const project = projects.find((p) => p.id === d.projectId);
+              const isOpen  = !!expanded[d.id];
               return (
                 <React.Fragment key={d.id}>
                   <tr
                     id={`doc-row-${d.id}`}
-                    style={{
-                      background: isArchived
-                        ? "rgba(91,45,154,0.04)"
-                        : isOpen ? "var(--bg-secondary)" : "transparent",
-                      opacity: isArchived ? 0.7 : 1,
-                    }}
-                    onMouseEnter={(e) => { if (!isOpen && !isArchived) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { if (!isOpen && !isArchived) e.currentTarget.style.background = "transparent"; }}
+                    style={{ background: isOpen ? "var(--bg-secondary)" : "transparent" }}
+                    onMouseEnter={(e) => { if (!isOpen) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                    onMouseLeave={(e) => { if (!isOpen) e.currentTarget.style.background = "transparent"; }}
                   >
                     <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{project?.projectId || d.projectId || "—"}</td>
                     <td style={S.td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        {isArchived && <span style={{ fontSize: "10px", background: "#f5f0ff", color: "#5b2d9a", padding: "1px 6px", borderRadius: "8px", fontWeight: "600" }}>ARCHIVED</span>}
-                        {d.subject}
-                      </div>
+                      <div>{d.subject}</div>
                       {d.dotsDate && (
                         <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
                           DoTS: {new Date(d.dotsDate + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
                         </div>
                       )}
-                      {isArchived && d.archivedBy && (
-                        <div style={{ fontSize: "10px", color: "#5b2d9a", marginTop: "2px" }}>
-                          Archived by {d.archivedBy}
-                          {d.archiveDetails?.dateLogged ? ` · ${new Date(d.archiveDetails.dateLogged + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}` : ""}
-                        </div>
-                      )}
                     </td>
-                    <td style={S.td}>
-                      {isArchived
-                        ? <span style={{ display: "inline-block", fontSize: "10px", padding: "3px 9px", borderRadius: "10px", background: "#f5f0ff", color: "#5b2d9a", fontWeight: "500" }}>ARCHIVED</span>
-                        : <span style={S.pill(d.status)}>{d.status}</span>
-                      }
-                    </td>
-                    <td style={S.td}>
-                      {isArchived
-                        ? <span style={{ fontSize: "11px", color: "#5b2d9a", fontWeight: "600" }}>—</span>
-                        : <span style={S.stageBadge}>{getStage(d.status)}</span>
-                      }
-                    </td>
+                    <td style={S.td}><span style={S.pill(d.status)}>{d.status}</span></td>
+                    <td style={S.td}><span style={S.stageBadge}>{getStage(d.status)}</span></td>
                     <td style={{ ...S.td, textAlign: "right" }}>
-                      <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-                        {isArchived && admin && (
-                          <button
-                            style={{ ...S.smBtn(false, false), border: "1px solid #5b2d9a", color: "#5b2d9a", fontSize: "11px" }}
-                            onClick={() => handleRestore(d.id)}
-                          >
-                            Restore
-                          </button>
-                        )}
-                        {!isArchived && (
-                          <button style={S.smBtn(isOpen)} onClick={() => toggleRow(d.id)}>
-                            {isOpen ? "Hide Details" : "Show Details"}
-                          </button>
-                        )}
-                      </div>
+                      <button style={S.smBtn(isOpen)} onClick={() => toggleRow(d.id)}>{isOpen ? "Hide Details" : "Show Details"}</button>
                     </td>
                   </tr>
-                  {isOpen && !isArchived && (
+                  {isOpen && (
                     <tr>
                       <td colSpan={5} style={S.detCell}>
                         <DetailsPanel
@@ -918,7 +769,7 @@ export default function Documents() {
                           onAddCustomItem={(label)          => handleAddCustomItem(d.id, label, d)}
                           onAssignMember={(uid)             => handleAssignMember(d.id, uid)}
                           onDelete={()                      => handleDelete(d.id)}
-                          onArchive={()                     => setArchiveTarget(d)}
+                          onArchive={()                     => handleArchive(d)}
                         />
                       </td>
                     </tr>

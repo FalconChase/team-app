@@ -1,9 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function HeaderForm({ info, onChange }) {
+  const { userProfile } = useAuth();
+  const teamId = userProfile?.teamId;
+
+  const [projects, setProjects] = useState([]);
+
+  useEffect(() => {
+    if (!teamId) return;
+    async function fetchProjects() {
+      try {
+        const q = query(
+          collection(db, 'teams', teamId, 'projects'),
+          orderBy('createdAt', 'desc')
+        );
+        const snap = await getDocs(q);
+        setProjects(snap.docs.map((d) => ({ docId: d.id, ...d.data() })));
+      } catch (err) {
+        console.error('HeaderForm: failed to fetch projects', err);
+      }
+    }
+    fetchProjects();
+  }, [teamId]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     onChange({ ...info, [name]: value });
+  };
+
+  const handleContractSelect = (e) => {
+    const selectedId = e.target.value;
+    const project = projects.find((p) => p.projectId === selectedId);
+    if (project) {
+      onChange({
+        ...info,
+        contractId:  project.projectId   || '',
+        projectName: project.projectName || '',
+        contractor:  project.contractor  || '',
+        location:    project.location    || '',
+      });
+    } else {
+      // blank option selected — clear the four fields
+      onChange({
+        ...info,
+        contractId:  '',
+        projectName: '',
+        contractor:  '',
+        location:    '',
+      });
+    }
   };
 
   const handleLogoUpload = (e) => {
@@ -52,39 +100,50 @@ export function HeaderForm({ info, onChange }) {
         <h3>Project Details</h3>
       </div>
 
+      {/* Contract ID — dropdown */}
       <div className="wt-field">
         <label>Contract ID</label>
-        <input
-          type="text"
+        <select
           name="contractId"
           value={info.contractId}
-          onChange={handleChange}
-          placeholder="e.g. 23N00001"
-        />
+          onChange={handleContractSelect}
+        >
+          <option value="">— Select a project —</option>
+          {projects.map((p) => (
+            <option key={p.docId} value={p.projectId}>
+              {p.projectId}
+            </option>
+          ))}
+        </select>
       </div>
 
+      {/* Project Name — auto-filled, read-only */}
       <div className="wt-field wt-form-col-2">
         <label>Project Name</label>
         <input
           type="text"
           name="projectName"
           value={info.projectName}
-          onChange={handleChange}
-          placeholder="e.g. Construction of..."
+          readOnly
+          placeholder="Auto-filled from selected project"
+          style={{ background: 'var(--bg-input-disabled, #f3f4f6)', cursor: 'not-allowed' }}
         />
       </div>
 
+      {/* Contractor — auto-filled, read-only */}
       <div className="wt-field">
         <label>Contractor</label>
         <input
           type="text"
           name="contractor"
           value={info.contractor}
-          onChange={handleChange}
-          placeholder="e.g. ABC CONSTRUCTION"
+          readOnly
+          placeholder="Auto-filled from selected project"
+          style={{ background: 'var(--bg-input-disabled, #f3f4f6)', cursor: 'not-allowed' }}
         />
       </div>
 
+      {/* Month — manual */}
       <div className="wt-field">
         <label>Month</label>
         <input
@@ -96,6 +155,7 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
+      {/* Year — manual */}
       <div className="wt-field">
         <label>Year</label>
         <input
@@ -107,14 +167,16 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
+      {/* Location — auto-filled, read-only */}
       <div className="wt-field wt-form-col-full">
         <label>Project Location</label>
         <input
           type="text"
           name="location"
           value={info.location}
-          onChange={handleChange}
-          placeholder="e.g. Butuan City"
+          readOnly
+          placeholder="Auto-filled from selected project"
+          style={{ background: 'var(--bg-input-disabled, #f3f4f6)', cursor: 'not-allowed' }}
         />
       </div>
 

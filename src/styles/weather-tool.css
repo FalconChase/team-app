@@ -1,0 +1,904 @@
+/* ============================================================
+   WEATHER TOOL — Standalone stylesheet
+   Place in: src/styles/weather-tool.css
+   Import in: WeatherTool.jsx
+   ============================================================ */
+
+/* ── PAGE WRAPPER ─────────────────────────────────────────── */
+.wt-page {
+  min-height: 100vh;
+  background-color: #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  font-family: sans-serif;
+}
+
+/* ── NAVBAR ───────────────────────────────────────────────── */
+.wt-header {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.wt-header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.wt-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wt-brand-icon {
+  background-color: #2563eb;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+}
+
+.wt-brand-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.wt-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── TAB GROUP ────────────────────────────────────────────── */
+.wt-tab-group {
+  display: flex;
+  align-items: center;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.wt-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: #4b5563;
+  transition: background 0.15s, color 0.15s;
+}
+
+.wt-tab:hover {
+  color: #111827;
+}
+
+.wt-tab.active {
+  background: white;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ── ACTION BUTTONS ───────────────────────────────────────── */
+.wt-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #d1d5db;
+  margin: 0 4px;
+}
+
+.wt-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  color: white;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  transition: filter 0.15s;
+}
+
+.wt-btn:hover {
+  filter: brightness(0.9);
+}
+
+.wt-btn-red    { background-color: #dc2626; }
+.wt-btn-purple { background-color: #9333ea; }
+.wt-btn-blue   { background-color: #2563eb; }
+
+/* ── MAIN CONTENT ─────────────────────────────────────────── */
+.wt-main {
+  flex: 1;
+  padding: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wt-section-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+/* ── INPUT TABLE WRAPPER ──────────────────────────────────── */
+.wt-input-wrapper {
+  height: calc(100vh - 300px);
+  min-height: 500px;
+}
+
+/* ── PREVIEW AREA ─────────────────────────────────────────── */
+.wt-preview-area {
+  overflow: auto;
+  background-color: #4b5563;
+  padding: 32px;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
+  display: flex;
+  justify-content: center;
+}
+
+/* ── A4 PREVIEW FRAMES ────────────────────────────────────── */
+.wt-a4-landscape {
+  width: 297mm;
+  height: 210mm;
+  padding: 10mm;
+  background: white;
+  margin: 20px auto;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.wt-a4-portrait {
+  width: 210mm;
+  height: 297mm;
+  padding: 10mm;
+  background: white;
+  margin: 20px auto;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* ── HEADER FORM ──────────────────────────────────────────── */
+.wt-form {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .wt-form { grid-template-columns: 1fr 1fr; }
+}
+
+@media (min-width: 1024px) {
+  .wt-form { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+.wt-form-section-header {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  margin-top: 4px;
+}
+
+.wt-form-section-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wt-form-col-full { grid-column: 1 / -1; }
+
+@media (min-width: 1024px) {
+  .wt-form-col-2 { grid-column: span 2; }
+}
+
+.wt-field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.wt-field input[type="text"] {
+  display: block;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.wt-field input[type="text"]:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+}
+
+.wt-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.wt-logo-preview {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wt-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.wt-file-input {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ── INPUT TABLE ──────────────────────────────────────────── */
+.wt-table-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.wt-table-header {
+  padding: 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.wt-table-header h2 {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.wt-table-header p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.wt-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.wt-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wt-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #d1d5db;
+  flex-shrink: 0;
+}
+
+.wt-table-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.wt-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+  font-size: 12px;
+}
+
+.wt-data-table thead {
+  background: #f3f4f6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.wt-data-table th {
+  padding: 6px 4px;
+  border: 1px solid #d1d5db;
+  min-width: 30px;
+  font-weight: 600;
+}
+
+.wt-data-table th:first-child {
+  min-width: 40px;
+}
+
+.wt-data-table td {
+  border: 1px solid #d1d5db;
+  padding: 0;
+}
+
+.wt-data-table td.day-label {
+  font-weight: 700;
+  background: #f9fafb;
+  padding: 2px 4px;
+}
+
+.wt-cell-input {
+  width: 100%;
+  height: 32px;
+  text-align: center;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: cell;
+  background: transparent;
+}
+
+.wt-cell-input:focus {
+  box-shadow: inset 0 0 0 2px #2563eb;
+}
+
+/* ── AUTO GENERATE MODAL ──────────────────────────────────── */
+.wt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+}
+
+.wt-modal {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  width: 100%;
+  max-width: 480px;
+  overflow: hidden;
+}
+
+.wt-modal-head {
+  background: #2563eb;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+}
+
+.wt-modal-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wt-modal-close {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 18px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.wt-modal-close:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.wt-modal-body {
+  padding: 24px;
+}
+
+.wt-modal-body p {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.wt-modal-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.wt-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.wt-modal-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.wt-modal-field input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.wt-modal-field input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+}
+
+.wt-modal-field-full {
+  margin-bottom: 16px;
+}
+
+.wt-modal-field-full label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.wt-unworkable-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wt-unworkable-row input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.wt-unworkable-row input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+}
+
+.wt-unworkable-row span {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.wt-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.wt-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.wt-modal-cancel {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.wt-modal-cancel:hover {
+  background: #f3f4f6;
+}
+
+.wt-modal-submit {
+  padding: 8px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  transition: filter 0.15s;
+}
+
+.wt-modal-submit:hover {
+  filter: brightness(0.9);
+}
+
+/* ── CHART LAYOUT (ChartLayout.jsx) ──────────────────────── */
+.wt-chart-root {
+  width: 100%;
+  max-width: 240mm;
+  margin: 0 auto;
+  font-family: sans-serif;
+  color: black;
+  display: flex;
+  flex-direction: column;
+  background: white;
+}
+
+.wt-chart-header {
+  height: 90px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid black;
+  margin-bottom: 4px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.wt-chart-logo {
+  width: 90px;
+  height: 80px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+}
+
+.wt-chart-logo img {
+  width: auto;
+  height: 100%;
+  max-height: 80px;
+  object-fit: contain;
+}
+
+.wt-chart-center-text {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+}
+
+.wt-chart-center-text .republic {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.wt-chart-center-text .dept {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.wt-chart-center-text .office {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a8a;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.wt-chart-center-text .address {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.wt-chart-meta {
+  width: 100%;
+  border-top: 1px solid black;
+  margin-top: 4px;
+  padding-top: 4px;
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.wt-chart-meta .meta-item {
+  display: flex;
+  gap: 6px;
+}
+
+.wt-chart-meta .meta-label {
+  font-weight: 700;
+}
+
+.wt-chart-meta .meta-value {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wt-chart-right-spacer {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.wt-chart-title-bar {
+  flex-shrink: 0;
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.wt-chart-title-bar span {
+  display: inline-block;
+  border: 1px solid black;
+  padding: 2px 32px;
+  background: #f9fafb;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* ── THE 7x5 FIXED GRID (shared with ChartLayout) ────────── */
+.wt-fixed-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: 100%;
+  border-top: 1px solid #000;
+  border-left: 1px solid #000;
+}
+
+.wt-grid-cell {
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  position: relative;
+  box-sizing: border-box;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1px;
+}
+
+.wt-day-label-overlay {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+  z-index: 10;
+}
+
+.wt-pie-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.wt-footer-legend {
+  grid-column: span 2;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4px;
+  background: #f9fafb;
+}
+
+.wt-footer-legend .legend-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: underline;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.wt-legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+
+.wt-legend-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wt-legend-swatch-sm {
+  width: 12px;
+  height: 12px;
+  border: 1px solid black;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.wt-legend-entry span {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.wt-footer-signatory {
+  grid-column: span 2;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 4px;
+  text-align: center;
+  background: #f9fafb;
+}
+
+.wt-footer-signatory .prepared-label {
+  font-size: 8px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  text-align: left;
+  padding-left: 16px;
+}
+
+.wt-footer-signatory .sig-name {
+  width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+.wt-footer-signatory .sig-name-text {
+  width: 100%;
+  border-bottom: 1px solid black;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  padding-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wt-footer-signatory .sig-designation {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #374151;
+  margin-top: 4px;
+}
+
+/* ── PRINT ENGINE ─────────────────────────────────────────── */
+@media print {
+  .wt-no-print {
+    display: none !important;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white;
+    overflow: visible !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .wt-printable, .wt-printable * {
+    visibility: visible;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .wt-printable {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    background: white;
+    z-index: 9999;
+  }
+
+  .wt-a4-landscape, .wt-a4-portrait {
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: auto;
+  }
+}

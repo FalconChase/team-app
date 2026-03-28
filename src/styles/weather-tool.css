@@ -858,6 +858,11 @@
   margin-top: 4px;
 }
 
+/* ── PRINT OVERLAY — hidden on screen, shown only on print ── */
+.wt-printable {
+  display: none;
+}
+
 /* ── PRINT ENGINE ─────────────────────────────────────────── */
 @media print {
   .wt-no-print {

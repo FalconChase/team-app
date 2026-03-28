@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { InputTable } from '../components/weather/InputTable';
 import { ChartLayout } from '../components/weather/ChartLayout';
 import { ReportView } from '../components/weather/ReportView';
@@ -20,6 +20,49 @@ const TABS = [
 function makeEmptyGrid() {
   return Array.from({ length: DAYS_IN_MONTH }, () =>
     Array.from({ length: HOURS_IN_DAY }, () => 0)
+  );
+}
+
+// A4 landscape in px at 96dpi
+const A4_W_PX = (297 / 25.4) * 96; // ~1122px
+const A4_H_PX = (210 / 25.4) * 96; // ~794px
+
+function ScaleToFit({ children }) {
+  const containerRef = useRef(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      const availW = entry.contentRect.width - 64;
+      const scaleW = availW / A4_W_PX;
+      setScale(Math.min(scaleW, 1)); // scale to width only, never upscale
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const scaledHeight = A4_H_PX * scale;
+
+  return (
+    <div ref={containerRef} className="wt-scale-outer">
+      <div style={{ height: scaledHeight + 32 }}>
+        <div
+          className="wt-scale-inner"
+          style={{
+            width: A4_W_PX,
+            height: A4_H_PX,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top center',
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -79,7 +122,6 @@ export default function WeatherTool() {
           </div>
 
           <div className="wt-controls">
-            {/* Tab group */}
             <div className="wt-tab-group">
               {TABS.map(tab => (
                 <button
@@ -124,7 +166,7 @@ export default function WeatherTool() {
           </div>
         )}
 
-        {/* Preview area for chart/logbook/report/standard-format */}
+        {/* Preview area */}
         {(activeTab === 'chart' || activeTab === 'logbook' || activeTab === 'report' || activeTab === 'standard-format') && (
           <div className="wt-preview-area">
             {activeTab === 'report' ? (
@@ -132,9 +174,9 @@ export default function WeatherTool() {
                 <ReportView data={weatherData} contractInfo={contractInfo} />
               </div>
             ) : activeTab === 'standard-format' ? (
-              <div className="wt-a4-landscape">
+              <ScaleToFit>
                 <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-              </div>
+              </ScaleToFit>
             ) : (
               <div className="wt-a4-landscape">
                 <ChartLayout
@@ -156,7 +198,7 @@ export default function WeatherTool() {
         onGenerate={handleAutoGenerate}
       />
 
-      {/* PRINT OVERLAY — controlled by CSS */}
+      {/* PRINT OVERLAY — hidden on screen, visible only when printing */}
       <div className="wt-printable">
         {activeTab === 'report' ? (
           <ReportView data={weatherData} contractInfo={contractInfo} />

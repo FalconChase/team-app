@@ -165,6 +165,17 @@
   justify-content: center;
 }
 
+/* ── SCALE-TO-FIT WRAPPER (StandardFormatView) ───────────── */
+.wt-scale-outer {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.wt-scale-inner {
+  flex-shrink: 0;
+}
+
 /* ── A4 PREVIEW FRAMES ────────────────────────────────────── */
 .wt-a4-landscape {
   width: 297mm;
@@ -858,7 +869,7 @@
   margin-top: 4px;
 }
 
-/* ── PRINT OVERLAY — hidden on screen, shown only on print ── */
+/* ── PRINT OVERLAY — hidden on screen ────────────────────── */
 .wt-printable {
   display: none;
 }
@@ -882,6 +893,10 @@
     visibility: hidden;
   }
 
+  .wt-printable {
+    display: block !important;
+  }
+
   .wt-printable, .wt-printable * {
     visibility: visible;
     -webkit-print-color-adjust: exact !important;
@@ -889,7 +904,6 @@
   }
 
   .wt-printable {
-    display: block !important;
     position: absolute;
     top: 0;
     left: 0;

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { InputTable } from '../components/weather/InputTable';
 import { ChartLayout } from '../components/weather/ChartLayout';
 import { ReportView } from '../components/weather/ReportView';
@@ -23,9 +24,8 @@ function makeEmptyGrid() {
   );
 }
 
-// A4 landscape in px at 96dpi
-const A4_W_PX = (297 / 25.4) * 96; // ~1122px
-const A4_H_PX = (210 / 25.4) * 96; // ~794px
+const A4_W_PX = (297 / 25.4) * 96;
+const A4_H_PX = (210 / 25.4) * 96;
 
 function ScaleToFit({ children }) {
   const containerRef = useRef(null);
@@ -34,13 +34,11 @@ function ScaleToFit({ children }) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
     const observer = new ResizeObserver(([entry]) => {
       const availW = entry.contentRect.width - 64;
       const scaleW = availW / A4_W_PX;
-      setScale(Math.min(scaleW, 1)); // scale to width only, never upscale
+      setScale(Math.min(scaleW, 1));
     });
-
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
@@ -67,10 +65,11 @@ function ScaleToFit({ children }) {
 }
 
 export default function WeatherTool() {
-  const [activeTab, setActiveTab]               = useState('input');
-  const [contractInfo, setContractInfo]         = useState(INITIAL_CONTRACT_INFO);
-  const [isAutoGenerateOpen, setAutoGenOpen]    = useState(false);
-  const [weatherData, setWeatherData]           = useState(makeEmptyGrid);
+  const [activeTab, setActiveTab]            = useState('input');
+  const [contractInfo, setContractInfo]      = useState(INITIAL_CONTRACT_INFO);
+  const [isAutoGenerateOpen, setAutoGenOpen] = useState(false);
+  const [weatherData, setWeatherData]        = useState(makeEmptyGrid);
+  const printRef = useRef(null);
 
   const handleDataChange = (dayIdx, hourIdx, value) => {
     setWeatherData(prev => {
@@ -91,29 +90,58 @@ export default function WeatherTool() {
     }
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
 
-  const isReport = activeTab === 'report';
+    const isReport = activeTab === 'report';
+    const pageSize = isReport ? 'A4 portrait' : 'A4 landscape';
 
-  const printStyles = `
-    @media print {
-      @page {
-        size: ${isReport ? 'A4 portrait' : 'A4 landscape'};
-        margin: ${isReport ? '5mm' : '0'};
-      }
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-    }
-  `;
+    // Collect all stylesheets from the current page
+    const styles = Array.from(document.styleSheets)
+      .map(sheet => {
+        try {
+          return Array.from(sheet.cssRules).map(rule => rule.cssText).join('\n');
+        } catch {
+          // Cross-origin sheets can't be read — use link tag instead
+          return sheet.href ? `@import url("${sheet.href}");` : '';
+        }
+      })
+      .join('\n');
+
+    const win = window.open('', '_blank', 'width=1200,height=900');
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            ${styles}
+            @media print {
+              @page { size: ${pageSize}; margin: 0; }
+              html, body { margin: 0; padding: 0; background: white; }
+            }
+            body { margin: 0; padding: 0; background: white; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 500);
+  };
 
   return (
     <div className="wt-page">
-      <style>{printStyles}</style>
 
       {/* NAVBAR */}
-      <header className="wt-header wt-no-print">
+      <header className="wt-header">
         <div className="wt-header-inner">
 
           <div className="wt-brand">
@@ -153,8 +181,8 @@ export default function WeatherTool() {
       {/* MAIN CONTENT */}
       <main className="wt-main">
 
-        {/* Header form — hidden on print */}
-        <div className="wt-no-print">
+        {/* Header form */}
+        <div>
           <p className="wt-section-label">PCMA Project Metadata</p>
           <HeaderForm info={contractInfo} onChange={setContractInfo} />
         </div>
@@ -170,15 +198,22 @@ export default function WeatherTool() {
         {(activeTab === 'chart' || activeTab === 'logbook' || activeTab === 'report' || activeTab === 'standard-format') && (
           <div className="wt-preview-area">
             {activeTab === 'report' ? (
-              <div className="wt-a4-portrait">
+              <div className="wt-a4-portrait" ref={printRef}>
                 <ReportView data={weatherData} contractInfo={contractInfo} />
               </div>
             ) : activeTab === 'standard-format' ? (
-              <ScaleToFit>
-                <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-              </ScaleToFit>
+              <>
+                {/* Hidden true-size ref for printing */}
+                <div ref={printRef} style={{ display: 'none' }}>
+                  <StandardFormatView data={weatherData} contractInfo={contractInfo} />
+                </div>
+                {/* Visible scaled preview */}
+                <ScaleToFit>
+                  <StandardFormatView data={weatherData} contractInfo={contractInfo} />
+                </ScaleToFit>
+              </>
             ) : (
-              <div className="wt-a4-landscape">
+              <div className="wt-a4-landscape" ref={printRef}>
                 <ChartLayout
                   data={weatherData}
                   contractInfo={contractInfo}
@@ -197,21 +232,6 @@ export default function WeatherTool() {
         onClose={() => setAutoGenOpen(false)}
         onGenerate={handleAutoGenerate}
       />
-
-      {/* PRINT OVERLAY — hidden on screen, visible only when printing */}
-      <div className="wt-printable">
-        {activeTab === 'report' ? (
-          <ReportView data={weatherData} contractInfo={contractInfo} />
-        ) : activeTab === 'standard-format' ? (
-          <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-        ) : (
-          <ChartLayout
-            data={weatherData}
-            contractInfo={contractInfo}
-            variant={activeTab === 'logbook' ? 'logbook' : 'standard'}
-          />
-        )}
-      </div>
 
     </div>
   );

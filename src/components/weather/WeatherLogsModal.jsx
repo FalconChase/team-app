@@ -8,13 +8,13 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, onLoad }) {
   const { userProfile } = useAuth();
-  const [activeTab, setActiveTab]   = useState('load');
-  const [logs, setLogs]             = useState([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-  const [saving, setSaving]         = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
-  const [error, setError]           = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [activeTab, setActiveTab]             = useState('load');
+  const [logs, setLogs]                       = useState([]);
+  const [loadingLogs, setLoadingLogs]         = useState(false);
+  const [saving, setSaving]                   = useState(false);
+  const [deletingId, setDeletingId]           = useState(null);
+  const [error, setError]                     = useState('');
+  const [successMsg, setSuccessMsg]           = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // Auto-generate label from contractInfo
@@ -27,7 +27,7 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
 
   const [label, setLabel] = useState(autoLabel);
 
-  // Sync label when contractInfo changes or modal opens on save tab
+  // Sync label when contractInfo changes or tab switches
   useEffect(() => {
     setLabel(autoLabel);
   }, [contractInfo.contractId, contractInfo.month, contractInfo.year, activeTab]);
@@ -49,11 +49,12 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
     setLoadingLogs(true);
     setError('');
     try {
-      const ref = collection(db, 'teams', userProfile.teamId, 'weatherLogs');
-      const q   = query(ref, orderBy('savedAt', 'desc'));
+      const ref  = collection(db, 'teams', userProfile.teamId, 'weatherLogs');
+      const q    = query(ref, orderBy('savedAt', 'desc'));
       const snap = await getDocs(q);
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
+      console.error('Fetch error:', err);
       setError('Failed to load snapshots. Please try again.');
     } finally {
       setLoadingLogs(false);
@@ -66,6 +67,10 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
     setError('');
     setSuccessMsg('');
     try {
+      // Firestore does not support nested arrays.
+      // Flatten each row of 24 numbers into a comma-separated string.
+      const flatGrid = weatherData.map(row => row.join(','));
+
       const snapshot = {
         label: label.trim(),
         contractInfo: {
@@ -76,16 +81,18 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
           month:       contractInfo.month       || '',
           year:        contractInfo.year        || '',
         },
-        weatherData,
+        weatherData: flatGrid,
         savedAt: serverTimestamp(),
         savedBy: userProfile.displayName || userProfile.username || 'Unknown',
       };
+
       await addDoc(
         collection(db, 'teams', userProfile.teamId, 'weatherLogs'),
         snapshot
       );
       setSuccessMsg(`Snapshot "${label.trim()}" saved successfully.`);
     } catch (err) {
+      console.error('Save error:', err);
       setError('Failed to save snapshot. Please try again.');
     } finally {
       setSaving(false);
@@ -100,6 +107,7 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
       setLogs(prev => prev.filter(l => l.id !== logId));
       setConfirmDeleteId(null);
     } catch (err) {
+      console.error('Delete error:', err);
       setError('Failed to delete snapshot.');
     } finally {
       setDeletingId(null);
@@ -107,8 +115,10 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
   }
 
   function handleLoad(log) {
+    // Unflatten: each row string "1,2,3,..." → array of numbers
+    const grid = log.weatherData.map(row => row.split(',').map(Number));
     onLoad({
-      weatherData: log.weatherData,
+      weatherData: grid,
       contractInfo: log.contractInfo,
     });
     onClose();
@@ -189,7 +199,7 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
                   className="wt-logs-label-input"
                   value={label}
                   onChange={e => setLabel(e.target.value)}
-                  placeholder="e.g. 1122222111-March-2025-weather-chart"
+                  placeholder="e.g. 25N00189-March-2025-weather-chart"
                 />
                 <p className="wt-hint">Auto-filled from project details. You can rename it.</p>
               </div>

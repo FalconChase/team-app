@@ -9,8 +9,7 @@ const NAV = [
   { path: "/projects", label: "Projects", icon: "🏗️" },
   { path: "/announcements", label: "Announcements", icon: "📢" },
   { path: "/members", label: "Members", icon: "👥" },
-  { path: "/chat", label: "Group Chat", icon: "💬" },
-  { path: "/weather-tool", label: "Weather Tool", icon: "🌤️" }
+  { path: "/chat", label: "Group Chat", icon: "💬" }
 ];
 
 export default function Layout({ children }) {
@@ -49,7 +48,15 @@ export default function Layout({ children }) {
 
   return (
     <div style={s.shell}>
-      <div style={s.topbar}>
+
+      {/* Hide only topbar and nav on print — leave main content alone */}
+      <style>{`
+        @media print {
+          #layout-topbar, #layout-nav { display: none !important; }
+        }
+      `}</style>
+
+      <div id="layout-topbar" style={s.topbar}>
         <div style={s.logo}>
           TEAM APP
           <span style={s.logosub}>{team?.department || "Loading..."} — {team?.name || ""}</span>
@@ -83,7 +90,7 @@ export default function Layout({ children }) {
         </div>
       </div>
 
-      <div style={s.navRow}>
+      <div id="layout-nav" style={s.navRow}>
         {NAV.map(n => (
           <NavLink key={n.path} to={n.path} end={n.path === "/"} style={({ isActive }) => ({ ...s.navLink, color: isActive ? "#fff" : "rgba(255,255,255,0.55)", borderBottomColor: isActive ? "#7ab3e0" : "transparent" })}>
             <span style={{ fontSize: "14px" }}>{n.icon}</span>
@@ -96,6 +103,7 @@ export default function Layout({ children }) {
       </div>
 
       <main style={s.main}>{children}</main>
+
     </div>
   );
 }

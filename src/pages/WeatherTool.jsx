@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import React, { useState } from 'react';
 import { InputTable } from '../components/weather/InputTable';
 import { ChartLayout } from '../components/weather/ChartLayout';
 import { ReportView } from '../components/weather/ReportView';
 import { HeaderForm } from '../components/weather/HeaderForm';
 import { AutoGenerateModal } from '../components/weather/AutoGenerateModal';
 import { StandardFormatView } from '../components/weather/StandardFormatView';
+import { WeatherLogsModal } from '../components/weather/WeatherLogsModal';
 import { DAYS_IN_MONTH, HOURS_IN_DAY, INITIAL_CONTRACT_INFO } from '../constants/weatherConstants';
 import { generateRangeData } from '../utils/weatherLogic';
 import '../styles/weather-tool.css';
@@ -24,52 +24,12 @@ function makeEmptyGrid() {
   );
 }
 
-const A4_W_PX = (297 / 25.4) * 96;
-const A4_H_PX = (210 / 25.4) * 96;
-
-function ScaleToFit({ children }) {
-  const containerRef = useRef(null);
-  const [scale, setScale] = useState(1);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const availW = entry.contentRect.width - 64;
-      const scaleW = availW / A4_W_PX;
-      setScale(Math.min(scaleW, 1));
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const scaledHeight = A4_H_PX * scale;
-
-  return (
-    <div ref={containerRef} className="wt-scale-outer">
-      <div style={{ height: scaledHeight + 32 }}>
-        <div
-          className="wt-scale-inner"
-          style={{
-            width: A4_W_PX,
-            height: A4_H_PX,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top center',
-          }}
-        >
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function WeatherTool() {
-  const [activeTab, setActiveTab]            = useState('input');
-  const [contractInfo, setContractInfo]      = useState(INITIAL_CONTRACT_INFO);
-  const [isAutoGenerateOpen, setAutoGenOpen] = useState(false);
-  const [weatherData, setWeatherData]        = useState(makeEmptyGrid);
-  const printRef = useRef(null);
+  const [activeTab, setActiveTab]             = useState('input');
+  const [contractInfo, setContractInfo]       = useState(INITIAL_CONTRACT_INFO);
+  const [isAutoGenerateOpen, setAutoGenOpen]  = useState(false);
+  const [isLogsOpen, setLogsOpen]             = useState(false);
+  const [weatherData, setWeatherData]         = useState(makeEmptyGrid);
 
   const handleDataChange = (dayIdx, hourIdx, value) => {
     setWeatherData(prev => {
@@ -90,58 +50,43 @@ export default function WeatherTool() {
     }
   };
 
-  const handlePrint = () => {
-    const printContent = printRef.current;
-    if (!printContent) return;
-
-    const isReport = activeTab === 'report';
-    const pageSize = isReport ? 'A4 portrait' : 'A4 landscape';
-
-    // Collect all stylesheets from the current page
-    const styles = Array.from(document.styleSheets)
-      .map(sheet => {
-        try {
-          return Array.from(sheet.cssRules).map(rule => rule.cssText).join('\n');
-        } catch {
-          // Cross-origin sheets can't be read — use link tag instead
-          return sheet.href ? `@import url("${sheet.href}");` : '';
-        }
-      })
-      .join('\n');
-
-    const win = window.open('', '_blank', 'width=1200,height=900');
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            ${styles}
-            @media print {
-              @page { size: ${pageSize}; margin: 0; }
-              html, body { margin: 0; padding: 0; background: white; }
-            }
-            body { margin: 0; padding: 0; background: white; }
-          </style>
-        </head>
-        <body>
-          ${printContent.innerHTML}
-        </body>
-      </html>
-    `);
-    win.document.close();
-    win.focus();
-    setTimeout(() => {
-      win.print();
-      win.close();
-    }, 500);
+  // Restore only weatherData + project fields from a snapshot
+  const handleLoadSnapshot = ({ weatherData: loadedGrid, contractInfo: loadedInfo }) => {
+    setWeatherData(loadedGrid);
+    setContractInfo(prev => ({
+      ...prev,
+      contractId:  loadedInfo.contractId  ?? prev.contractId,
+      projectName: loadedInfo.projectName ?? prev.projectName,
+      location:    loadedInfo.location    ?? prev.location,
+      contractor:  loadedInfo.contractor  ?? prev.contractor,
+      month:       loadedInfo.month       ?? prev.month,
+      year:        loadedInfo.year        ?? prev.year,
+    }));
   };
+
+  const handlePrint = () => window.print();
+
+  const isReport = activeTab === 'report';
+
+  const printStyles = `
+    @media print {
+      @page {
+        size: ${isReport ? 'A4 portrait' : 'A4 landscape'};
+        margin: ${isReport ? '5mm' : '0'};
+      }
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  `;
 
   return (
     <div className="wt-page">
+      <style>{printStyles}</style>
 
       {/* NAVBAR */}
-      <header className="wt-header">
+      <header className="wt-header wt-no-print">
         <div className="wt-header-inner">
 
           <div className="wt-brand">
@@ -150,6 +95,7 @@ export default function WeatherTool() {
           </div>
 
           <div className="wt-controls">
+            {/* Tab group */}
             <div className="wt-tab-group">
               {TABS.map(tab => (
                 <button
@@ -170,6 +116,9 @@ export default function WeatherTool() {
             <button className="wt-btn wt-btn-purple" onClick={() => setAutoGenOpen(true)}>
               ✦ Auto Generate
             </button>
+            <button className="wt-btn wt-btn-green" onClick={() => setLogsOpen(true)}>
+              💾 Logs
+            </button>
             <button className="wt-btn wt-btn-blue" onClick={handlePrint}>
               🖨 Print
             </button>
@@ -181,8 +130,8 @@ export default function WeatherTool() {
       {/* MAIN CONTENT */}
       <main className="wt-main">
 
-        {/* Header form */}
-        <div>
+        {/* Header form — hidden on print */}
+        <div className="wt-no-print">
           <p className="wt-section-label">PCMA Project Metadata</p>
           <HeaderForm info={contractInfo} onChange={setContractInfo} />
         </div>
@@ -194,26 +143,19 @@ export default function WeatherTool() {
           </div>
         )}
 
-        {/* Preview area */}
+        {/* Preview area for chart/logbook/report/standard-format */}
         {(activeTab === 'chart' || activeTab === 'logbook' || activeTab === 'report' || activeTab === 'standard-format') && (
           <div className="wt-preview-area">
             {activeTab === 'report' ? (
-              <div className="wt-a4-portrait" ref={printRef}>
+              <div className="wt-a4-portrait">
                 <ReportView data={weatherData} contractInfo={contractInfo} />
               </div>
             ) : activeTab === 'standard-format' ? (
-              <>
-                {/* Hidden true-size ref for printing */}
-                <div ref={printRef} style={{ display: 'none' }}>
-                  <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-                </div>
-                {/* Visible scaled preview */}
-                <ScaleToFit>
-                  <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-                </ScaleToFit>
-              </>
+              <div className="wt-a4-landscape">
+                <StandardFormatView data={weatherData} contractInfo={contractInfo} />
+              </div>
             ) : (
-              <div className="wt-a4-landscape" ref={printRef}>
+              <div className="wt-a4-landscape">
                 <ChartLayout
                   data={weatherData}
                   contractInfo={contractInfo}
@@ -232,6 +174,30 @@ export default function WeatherTool() {
         onClose={() => setAutoGenOpen(false)}
         onGenerate={handleAutoGenerate}
       />
+
+      {/* WEATHER LOGS MODAL */}
+      <WeatherLogsModal
+        isOpen={isLogsOpen}
+        onClose={() => setLogsOpen(false)}
+        contractInfo={contractInfo}
+        weatherData={weatherData}
+        onLoad={handleLoadSnapshot}
+      />
+
+      {/* PRINT OVERLAY — controlled by CSS */}
+      <div className="wt-printable">
+        {activeTab === 'report' ? (
+          <ReportView data={weatherData} contractInfo={contractInfo} />
+        ) : activeTab === 'standard-format' ? (
+          <StandardFormatView data={weatherData} contractInfo={contractInfo} />
+        ) : (
+          <ChartLayout
+            data={weatherData}
+            contractInfo={contractInfo}
+            variant={activeTab === 'logbook' ? 'logbook' : 'standard'}
+          />
+        )}
+      </div>
 
     </div>
   );

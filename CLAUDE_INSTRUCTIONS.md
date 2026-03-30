@@ -4,8 +4,11 @@
 - **App Name:** Team App
 - **Stack:** React 19 + Vite 8, Firebase (Auth, Firestore, Hosting, Storage), React Router DOM v7, jsPDF + jspdf-autotable + html2canvas + react-to-print (PDF/print features), Plain CSS (no Tailwind, no component library)
 - **Editor:** VSCode
-- **Commands:** npm run dev, npm run build, firebase deploy
+- **Terminal:** PowerShell — always write terminal commands in PowerShell syntax
+- **Commands:** `npm run dev`, `npm run build`, `firebase deploy`
 - **GitHub Repo:** https://github.com/FalconChase/team-app
+- **Firebase Console:** https://console.firebase.google.com/project/team-app-98520/overview
+- **Hosting URL:** https://team-app-98520.web.app
 - **Owner:** FalconChase
 
 ## Project Structure
@@ -42,68 +45,120 @@ teamapp/
 - Departments, roles, and members are configurable, not hardcoded
 - Key output: unified cross-department data with exportable PDF reports for management
 
-## Connected External Tools
-The team app integrates with external tools embedded as iframes in the Tools tab. These are separate apps with their own repos and deployment pipelines.
+---
 
-### Weather Tool
-- **URL:** `https://weather-tool.web.app`
-- **Repo:** `https://github.com/FalconChase/weather-tool`
-- **Stack:** React 19 + Vite, TypeScript, Tailwind CSS (via Vite build — NOT CDN), Firebase Hosting
-- **Integration:** Team app sends project data via `postMessage` to the weather tool iframe
-- **postMessage origin:** `https://team-app-98520.web.app`
-- **Message type:** `PROJECT_AUTOFILL`
-- **Fields sent:** `contractId`, `projectName`, `contractor`, `location`
-- **Fix guide:** See `docs/TAILWIND_FIX_GUIDE.md` in the weather tool repo
-
-## Rules for Claude
+## Rules for Claude — Read and Follow Every Single One
 
 ### 1. At the start of every session
-- Read this file first
-- Wait for me to describe the change I want first
-- Then ask me for the relevant current code before writing anything
-- Fetch files using raw GitHub URLs in this format:
-  `https://raw.githubusercontent.com/FalconChase/team-app/main/[filepath]`
+- Fetch and read this file first before doing anything else
+- Read the session summary the user pastes — treat it as absolute ground truth for what was already fixed
+- Fetch all relevant files fresh from GitHub before writing any code:
+  `https://raw.githubusercontent.com/FalconChase/team-app/refs/heads/main/[filepath]`
+- Never rely on files seen in a previous thread — always re-fetch from GitHub
+- Wait for the user to describe what they want → fetch relevant files → then write code
 
-### 2. During the session
-- I work in iterations — each conversation is usually one update, feature, or fix
-- Do not rewrite things I didn't ask to change
-- Do not suggest expanding scope, adding new dependencies, or future features unless asked
-- If something is ambiguous, ask one focused clarifying question before proceeding
-- Always use `import.meta.env.VITE_*` for environment variables — never hardcode keys or secrets
+### 2. THE MOST IMPORTANT RULE — No second-guessing, no looping
+- **GitHub is always the source of truth.** Always fetch fresh before touching any file.
+- **Session summary says it's fixed? Trust it. Do not re-investigate or overwrite it.**
+- **Only change what was asked.** Everything else stays byte-for-byte identical to what GitHub returned.
+- **Always deliver a full file rewrite** — even for the smallest one-line change. Never deliver partial patches or inline diffs. The user replaces the whole file every time.
+- **Never base a rewrite on a version from earlier in the conversation** if a newer fetch exists. Always use the most recently fetched version as the base.
+- **If multiple things are broken, fix ALL of them in one pass.** Fetch → identify all issues → apply all fixes → deliver once.
+- **Do not ask clarifying questions about things already in the session summary.**
 
-### 3. Code delivery rules
-- For any code over 100 lines — deliver as a downloadable file, do not paste inline
-- For code under 100 lines — paste inline but keep explanation brief
-- After delivering code always follow up with:
-  - What changed
+### 3. During the session
+- One fix or feature at a time — do not bundle unrelated changes
+- Do not rewrite things that weren't asked to change
+- Do not suggest new scope, new dependencies, or future features unless asked
+- If something is ambiguous, ask ONE focused question before proceeding
+- Always use `import.meta.env.VITE_*` for environment variables — never hardcode secrets
+- Terminal is PowerShell — never use bash-only syntax
+
+### 4. Code delivery rules
+- **Always deliver a full file rewrite** — no exceptions, even for tiny fixes
+- Deliver as a downloadable file (not pasted inline) since files are almost always over 100 lines
+- After delivering the file, always follow up with:
+  - What changed (specific lines/sections)
   - Why it changed
   - Any risks or side effects
-  - Short instruction on what to do with it (e.g. replace whole file, merge specific section, etc.)
+  - Which folder to place the file in
 
-### 4. At the end of every session
-Always provide ready-to-copy git commands with a filled-in commit message:
-```bash
-git add .
-git commit -m "describe exactly what changed"
-git push
-```
+### 5. Step-by-step confirmation flow — follow this after every fix
+After delivering a fixed file, Claude must walk the user through every step and wait for confirmation before moving to the next. Do not skip steps. Do not bundle steps.
 
-### 5. After a successful update
-- When I confirm the update is working, ask if I want a team announcement drafted
+**Step 1 — Test locally:**
+> "Replace the file and run `npm run dev`. Does the fix work? Tell me what you see."
+
+Wait for user response.
+- If broken → user describes the issue → fix it → repeat Step 1
+- If working → move to Step 2
+
+**Step 2 — Push to GitHub:**
+> "Good. Push it to GitHub now before anything else:"
+> ```powershell
+> git add .
+> git commit -m "[filled-in message]"
+> git push
+> ```
+> "Confirm when done."
+
+Wait for user confirmation.
+
+**Step 3 — Deploy to Firebase:**
+> "Now deploy it live:"
+> ```powershell
+> firebase deploy
+> ```
+> "Confirm when done."
+
+Wait for user confirmation.
+
+**Step 4 — Verify live app:**
+> "Check the live app at https://team-app-98520.web.app — does everything look correct?"
+
+Wait for user confirmation.
+- If broken on live → investigate → fix → restart from Step 1
+- If confirmed working → move to Step 5
+
+**Step 5 — Session summary:**
+Output the filled-in session summary block (see template below) so the user can copy it for the next thread.
+
+### 6. After a successful update
+- Ask if the user wants a team announcement drafted
 - Keep it concise, plain language, no technical jargon
 - Format: what's new, what it does, why it matters to the team
 - Should feel like an internal update message, not a changelog
 
-### 6. Weather tool — Tailwind rules (NEVER violate these)
-The weather tool uses Tailwind CSS processed by Vite at build time. These rules are permanent and must never be changed:
-
-- **NEVER remove** `@tailwind base`, `@tailwind components`, `@tailwind utilities` from the top of `index.css` in the weather tool — removing these breaks all styles
-- **NEVER add** `<script src="https://cdn.tailwindcss.com">` to `index.html` — the CDN is redundant and conflicts with the Vite build
-- **ALWAYS build before deploying** the weather tool: `npm run build && firebase deploy` — never `firebase deploy` alone
-- If styles appear broken, check `docs/TAILWIND_FIX_GUIDE.md` before making any changes
+---
 
 ## How to Start a New Thread
-1. Paste this URL to Claude:
-   `https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md`
-2. Say: "Read my instructions first"
-3. Describe what you want to work on today
+
+Paste this exact block at the start of every new thread:
+
+```
+Read my instructions first:
+https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md
+
+Session summary from last thread:
+[paste summary here]
+
+What I want to work on today:
+[describe the fix or feature]
+```
+
+---
+
+## Session Summary Template
+
+Claude must output this at the end of every session, fully filled in:
+
+```
+COMPLETED THIS SESSION:
+- [every fix or feature completed, be specific]
+
+STILL BROKEN / NEXT UP:
+- [anything not yet fixed, or what comes next]
+
+KEY FILES TOUCHED:
+- [filepath] — [what changed]
+```

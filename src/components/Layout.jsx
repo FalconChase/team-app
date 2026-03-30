@@ -6,11 +6,11 @@ import { useTeam } from "../contexts/TeamContext";
 const NAV = [
   { path: "/", label: "Dashboard", icon: "⊞" },
   { path: "/documents", label: "Documents", icon: "📄" },
+  { path: "/records", label: "Records", icon: "🗂️" },
   { path: "/projects", label: "Projects", icon: "🏗️" },
   { path: "/announcements", label: "Announcements", icon: "📢" },
   { path: "/members", label: "Members", icon: "👥" },
-  { path: "/chat", label: "Group Chat", icon: "💬" },
-  { path: "/weather-tool", label: "Weather Tool", icon: "🌤️" }
+  { path: "/chat", label: "Group Chat", icon: "💬" }
 ];
 
 export default function Layout({ children }) {
@@ -83,7 +83,7 @@ export default function Layout({ children }) {
         </div>
       </div>
 
-      <div id="layout-nav" style={s.navRow}>
+      <div style={s.navRow}>
         {NAV.map(n => (
           <NavLink key={n.path} to={n.path} end={n.path === "/"} style={({ isActive }) => ({ ...s.navLink, color: isActive ? "#fff" : "rgba(255,255,255,0.55)", borderBottomColor: isActive ? "#7ab3e0" : "transparent" })}>
             <span style={{ fontSize: "14px" }}>{n.icon}</span>

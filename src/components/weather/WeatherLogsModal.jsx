@@ -117,10 +117,7 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
   function handleLoad(log) {
     // Unflatten: each row string "1,2,3,..." → array of numbers
     const grid = log.weatherData.map(row => row.split(',').map(Number));
-    onLoad({
-      weatherData: grid,
-      contractInfo: log.contractInfo,
-    });
+    onLoad(log.contractInfo, grid);
     onClose();
   }
 
@@ -185,7 +182,7 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
                   <strong>{contractInfo.projectName || <em>empty</em>}</strong>
                 </div>
                 <div className="wt-logs-preview-row">
-                  <span>Period</span>
+<span>Period</span>
                   <strong>{contractInfo.month || '—'} {contractInfo.year || ''}</strong>
                 </div>
               </div>

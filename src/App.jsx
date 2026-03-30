@@ -10,6 +10,7 @@ import Announcements from "./pages/Announcements";
 import Members from "./pages/Members";
 import Chat from "./pages/Chat";
 import Records from "./pages/Records";
+import Archive from "./pages/Archive";
 import WeatherTool from "./pages/WeatherTool";
 import { Setup, Pending, Settings, Reports } from "./pages/Misc";
 
@@ -59,7 +60,6 @@ function AppRoutes() {
       <Route
         path="/setup"
         element={
-          // Only accessible if logged in but no team yet
           currentUser && userProfile && !userProfile.teamId
             ? <TeamProvider><Setup /></TeamProvider>
             : <Navigate to="/" replace />
@@ -82,6 +82,7 @@ function AppRoutes() {
       <Route path="/members"       element={<ProtectedPage><Members /></ProtectedPage>} />
       <Route path="/chat"          element={<ProtectedPage><Chat /></ProtectedPage>} />
       <Route path="/records"       element={<ProtectedPage><Records /></ProtectedPage>} />
+      <Route path="/archive"       element={<ProtectedPage><Archive /></ProtectedPage>} />
       <Route path="/weather-tool"  element={<ProtectedPage><WeatherTool /></ProtectedPage>} />
       <Route path="/settings"      element={<ProtectedPage><Settings /></ProtectedPage>} />
       <Route path="/reports"       element={<ProtectedPage><Reports /></ProtectedPage>} />

@@ -4,11 +4,8 @@
 - **App Name:** Team App
 - **Stack:** React 19 + Vite 8, Firebase (Auth, Firestore, Hosting, Storage), React Router DOM v7, jsPDF + jspdf-autotable + html2canvas + react-to-print (PDF/print features), Plain CSS (no Tailwind, no component library)
 - **Editor:** VSCode
-- **Terminal:** PowerShell — always write terminal commands in PowerShell syntax
-- **Commands:** `npm run dev`, `npm run build`, `firebase deploy`
+- **Commands:** npm run dev, npm run build, firebase deploy
 - **GitHub Repo:** https://github.com/FalconChase/team-app
-- **Firebase Console:** https://console.firebase.google.com/project/team-app-98520/overview
-- **Hosting URL:** https://team-app-98520.web.app
 - **Owner:** FalconChase
 
 ## Project Structure
@@ -45,120 +42,94 @@ teamapp/
 - Departments, roles, and members are configurable, not hardcoded
 - Key output: unified cross-department data with exportable PDF reports for management
 
----
-
-## Rules for Claude — Read and Follow Every Single One
+## Rules for Claude
 
 ### 1. At the start of every session
-- Fetch and read this file first before doing anything else
-- Read the session summary the user pastes — treat it as absolute ground truth for what was already fixed
-- Fetch all relevant files fresh from GitHub before writing any code:
-  `https://raw.githubusercontent.com/FalconChase/team-app/refs/heads/main/[filepath]`
-- Never rely on files seen in a previous thread — always re-fetch from GitHub
-- Wait for the user to describe what they want → fetch relevant files → then write code
+- Read this file first
+- Wait for me to describe the change I want first
+- Then ask me for the relevant current code before writing anything
+- Fetch files using raw GitHub URLs in this format:
+  `https://raw.githubusercontent.com/FalconChase/team-app/main/[filepath]`
+- **After fetching any raw file, always verify it is the latest version** by asking me to run:
+  ```powershell
+  git log --oneline -1
+  ```
+  Then compare the commit hash and message against what GitHub shows. If anything looks off, wait 2-3 minutes and re-fetch before proceeding.
 
-### 2. THE MOST IMPORTANT RULE — No second-guessing, no looping
-- **GitHub is always the source of truth.** Always fetch fresh before touching any file.
-- **Session summary says it's fixed? Trust it. Do not re-investigate or overwrite it.**
-- **Only change what was asked.** Everything else stays byte-for-byte identical to what GitHub returned.
-- **Always deliver a full file rewrite** — even for the smallest one-line change. Never deliver partial patches or inline diffs. The user replaces the whole file every time.
-- **Never base a rewrite on a version from earlier in the conversation** if a newer fetch exists. Always use the most recently fetched version as the base.
-- **If multiple things are broken, fix ALL of them in one pass.** Fetch → identify all issues → apply all fixes → deliver once.
-- **Do not ask clarifying questions about things already in the session summary.**
+### 2. During the session
+- I work in iterations — each conversation is usually one update, feature, or fix
+- Do not rewrite things I didn't ask to change
+- Do not suggest expanding scope, adding new dependencies, or future features unless asked
+- If something is ambiguous, ask one focused clarifying question before proceeding
+- Always use `import.meta.env.VITE_*` for environment variables — never hardcode keys or secrets
 
-### 3. During the session
-- One fix or feature at a time — do not bundle unrelated changes
-- Do not rewrite things that weren't asked to change
-- Do not suggest new scope, new dependencies, or future features unless asked
-- If something is ambiguous, ask ONE focused question before proceeding
-- Always use `import.meta.env.VITE_*` for environment variables — never hardcode secrets
-- Terminal is PowerShell — never use bash-only syntax
-
-### 4. Code delivery rules
-- **Always deliver a full file rewrite** — no exceptions, even for tiny fixes
-- Deliver as a downloadable file (not pasted inline) since files are almost always over 100 lines
-- After delivering the file, always follow up with:
-  - What changed (specific lines/sections)
+### 3. Code delivery rules
+- **Always deliver the full rewritten file as a downloadable file** — regardless of how many lines it is
+- Exception: if the change is a small isolated snippet under 100 lines with no surrounding context needed, paste inline — but still keep explanation brief
+- After delivering code always follow up with:
+  - What changed
   - Why it changed
   - Any risks or side effects
-  - Which folder to place the file in
+  - Short instruction on what to do with it (e.g. replace whole file, merge specific section, etc.)
 
-### 5. Step-by-step confirmation flow — follow this after every fix
-After delivering a fixed file, Claude must walk the user through every step and wait for confirmation before moving to the next. Do not skip steps. Do not bundle steps.
+### 4. At the end of every session
+Always provide ready-to-copy git commands with a filled-in commit message:
+```bash
+git add .
+git commit -m "describe exactly what changed"
+git push
+```
+Then immediately ask me to run:
+```powershell
+git log --oneline -1
+```
+And paste the output here so I can confirm the commit hash matches what GitHub received. This is the CDN-proof way to verify a push landed correctly — do not skip this step.
 
-**Step 1 — Test locally:**
-> "Replace the file and run `npm run dev`. Does the fix work? Tell me what you see."
-
-Wait for user response.
-- If broken → user describes the issue → fix it → repeat Step 1
-- If working → move to Step 2
-
-**Step 2 — Push to GitHub:**
-> "Good. Push it to GitHub now before anything else:"
-> ```powershell
-> git add .
-> git commit -m "[filled-in message]"
-> git push
-> ```
-> "Confirm when done."
-
-Wait for user confirmation.
-
-**Step 3 — Deploy to Firebase:**
-> "Now deploy it live:"
-> ```powershell
-> firebase deploy
-> ```
-> "Confirm when done."
-
-Wait for user confirmation.
-
-**Step 4 — Verify live app:**
-> "Check the live app at https://team-app-98520.web.app — does everything look correct?"
-
-Wait for user confirmation.
-- If broken on live → investigate → fix → restart from Step 1
-- If confirmed working → move to Step 5
-
-**Step 5 — Session summary:**
-Output the filled-in session summary block (see template below) so the user can copy it for the next thread.
-
-### 6. After a successful update
-- Ask if the user wants a team announcement drafted
+### 5. After a successful update
+- When I confirm the update is working, ask if I want a team announcement drafted
 - Keep it concise, plain language, no technical jargon
 - Format: what's new, what it does, why it matters to the team
 - Should feel like an internal update message, not a changelog
 
----
+### 6. Code change safety rules
+- **Always prefer surgical edits** — identify the exact lines to change and deliver only those diffs, not a full rewrite
+- **Full rewrites require explicit permission** — never rewrite an entire file unless I specifically ask for it
+- **If surgical edits aren't practical** (e.g. too many scattered changes, structural conflict), stop and tell me:
+  - Why surgical edits won't work
+  - What a rewrite would affect
+  - Give me the option to proceed or trade off features before touching anything
+- **Before any edit**, confirm which section/block is being changed and why — one focused clarification if needed
+- **Never silently remove or simplify existing features** to accommodate a new change — flag the conflict and let me decide
+
+### 7. Conversation length warning
+- Monitor thread length conservatively — warn early, before context degradation actually happens
+- Warn at natural pause points only — **never interrupt mid-fix or mid-explanation**
+- If a fix is in progress, finish it cleanly first, then warn immediately after
+- Use this warning:
+  > ⚠️ **This thread is getting long.** Consider starting a new session and pasting the instructions URL to keep things sharp.
+- If the thread is extremely long and a new task is about to start, warn proactively before even beginning it
+
+### 8. Session handoff prompt
+- If I say anything like "let's continue in a new thread" or "start a fresh session", generate a ready-to-paste handoff prompt containing:
+  - What we were working on
+  - What was completed and confirmed working
+  - What is still pending or in progress
+  - Any important decisions, constraints, or context I'd need to carry over
+- Format it so I can paste it directly into a new thread after the instructions URL
+
+### 9. ⚡ CDN LAG AWARENESS — NON-NEGOTIABLE POWER RULE
+- GitHub's raw CDN can serve stale/cached file content for 1-5 minutes after a push
+- **Never treat a raw URL fetch alone as proof that code is current — ever**
+- This rule cannot be skipped, assumed, or shortcut for any reason
+- The only CDN-proof verification methods are:
+  1. **Commit hash check** — ask me to run `git log --oneline -1` and compare the hash to GitHub's commit history
+  2. **GitHub file view** — the non-raw GitHub file view (github.com/FalconChase/team-app/blob/main/...) updates immediately after a push, unlike raw URLs
+- If I fetch a raw file and something looks outdated or inconsistent with what I'd expect, flag it immediately — do not proceed with potentially stale code
+- If the raw content doesn't match what was reportedly just pushed, say so clearly and ask me to wait 2-3 minutes before re-fetching
+- **This rule protects every other rule — stale code breaks everything downstream**
 
 ## How to Start a New Thread
-
-Paste this exact block at the start of every new thread:
-
-```
-Read my instructions first:
-https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md
-
-Session summary from last thread:
-[paste summary here]
-
-What I want to work on today:
-[describe the fix or feature]
-```
-
----
-
-## Session Summary Template
-
-Claude must output this at the end of every session, fully filled in:
-
-```
-COMPLETED THIS SESSION:
-- [every fix or feature completed, be specific]
-
-STILL BROKEN / NEXT UP:
-- [anything not yet fixed, or what comes next]
-
-KEY FILES TOUCHED:
-- [filepath] — [what changed]
-```
+1. Paste this URL to Claude:
+   `https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md`
+2. Say: "Read my instructions first"
+3. Describe what you want to work on today

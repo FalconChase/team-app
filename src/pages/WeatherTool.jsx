@@ -25,11 +25,11 @@ function makeEmptyGrid() {
 }
 
 export default function WeatherTool() {
-  const [activeTab, setActiveTab]             = useState('input');
-  const [contractInfo, setContractInfo]       = useState(INITIAL_CONTRACT_INFO);
-  const [isAutoGenerateOpen, setAutoGenOpen]  = useState(false);
-  const [isLogsOpen, setLogsOpen]             = useState(false);
-  const [weatherData, setWeatherData]         = useState(makeEmptyGrid);
+  const [activeTab, setActiveTab]               = useState('input');
+  const [contractInfo, setContractInfo]         = useState(INITIAL_CONTRACT_INFO);
+  const [isAutoGenerateOpen, setAutoGenOpen]    = useState(false);
+  const [isLogsOpen, setLogsOpen]               = useState(false);
+  const [weatherData, setWeatherData]           = useState(makeEmptyGrid);
 
   const handleDataChange = (dayIdx, hourIdx, value) => {
     setWeatherData(prev => {
@@ -50,43 +50,63 @@ export default function WeatherTool() {
     }
   };
 
-  // Restore only weatherData + project fields from a snapshot
-  const handleLoadSnapshot = ({ weatherData: loadedGrid, contractInfo: loadedInfo }) => {
-    setWeatherData(loadedGrid);
-    setContractInfo(prev => ({
-      ...prev,
-      contractId:  loadedInfo.contractId  ?? prev.contractId,
-      projectName: loadedInfo.projectName ?? prev.projectName,
-      location:    loadedInfo.location    ?? prev.location,
-      contractor:  loadedInfo.contractor  ?? prev.contractor,
-      month:       loadedInfo.month       ?? prev.month,
-      year:        loadedInfo.year        ?? prev.year,
-    }));
-  };
+  const handlePrint = () => {
+    const isReport = activeTab === 'report';
+    const pageSize = isReport ? 'A4 portrait' : 'A4 landscape';
 
-  const handlePrint = () => window.print();
+    // Grab all stylesheets from the current page
+    const styles = Array.from(document.styleSheets)
+      .map(sheet => {
+        try {
+          return Array.from(sheet.cssRules).map(r => r.cssText).join('\n');
+        } catch {
+          // Cross-origin sheets — link them instead
+          return sheet.href ? `@import url("${sheet.href}");` : '';
+        }
+      })
+      .join('\n');
 
-  const isReport = activeTab === 'report';
+    // Grab just the printable content
+    const printEl = document.getElementById('wt-print-target');
+    if (!printEl) return;
+    const html = printEl.innerHTML;
 
-  const printStyles = `
-    @media print {
-      @page {
-        size: ${isReport ? 'A4 portrait' : 'A4 landscape'};
-        margin: ${isReport ? '5mm' : '0'};
-      }
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Please allow popups for this site to enable printing.');
+      return;
     }
-  `;
+
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            ${styles}
+            @media print {
+              @page { size: ${pageSize}; margin: 0; }
+              body { margin: 0; background: white; }
+            }
+            body { margin: 0; background: white; }
+          </style>
+        </head>
+        <body>${html}</body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 500);
+  };
 
   return (
     <div className="wt-page">
-      <style>{printStyles}</style>
 
       {/* NAVBAR */}
-      <header className="wt-header wt-no-print">
+      <header className="wt-header">
         <div className="wt-header-inner">
 
           <div className="wt-brand">
@@ -116,7 +136,7 @@ export default function WeatherTool() {
             <button className="wt-btn wt-btn-purple" onClick={() => setAutoGenOpen(true)}>
               ✦ Auto Generate
             </button>
-            <button className="wt-btn wt-btn-green" onClick={() => setLogsOpen(true)}>
+            <button className="wt-btn wt-btn-teal" onClick={() => setLogsOpen(true)}>
               💾 Logs
             </button>
             <button className="wt-btn wt-btn-blue" onClick={handlePrint}>
@@ -130,11 +150,9 @@ export default function WeatherTool() {
       {/* MAIN CONTENT */}
       <main className="wt-main">
 
-        {/* Header form — hidden on print */}
-        <div className="wt-no-print">
-          <p className="wt-section-label">PCMA Project Metadata</p>
-          <HeaderForm info={contractInfo} onChange={setContractInfo} />
-        </div>
+        {/* Header form */}
+        <p className="wt-section-label">PCMA Project Metadata</p>
+        <HeaderForm info={contractInfo} onChange={setContractInfo} />
 
         {/* Input tab */}
         {activeTab === 'input' && (
@@ -143,26 +161,26 @@ export default function WeatherTool() {
           </div>
         )}
 
-        {/* Preview area for chart/logbook/report/standard-format */}
+        {/* Preview area */}
         {(activeTab === 'chart' || activeTab === 'logbook' || activeTab === 'report' || activeTab === 'standard-format') && (
           <div className="wt-preview-area">
-            {activeTab === 'report' ? (
-              <div className="wt-a4-portrait">
-                <ReportView data={weatherData} contractInfo={contractInfo} />
-              </div>
-            ) : activeTab === 'standard-format' ? (
-              <div className="wt-a4-landscape">
+            <div id="wt-print-target">
+              {activeTab === 'report' ? (
+                <div className="wt-a4-portrait">
+                  <ReportView data={weatherData} contractInfo={contractInfo} />
+                </div>
+              ) : activeTab === 'standard-format' ? (
                 <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-              </div>
-            ) : (
-              <div className="wt-a4-landscape">
-                <ChartLayout
-                  data={weatherData}
-                  contractInfo={contractInfo}
-                  variant={activeTab === 'logbook' ? 'logbook' : 'standard'}
-                />
-              </div>
-            )}
+              ) : (
+                <div className="wt-a4-landscape">
+                  <ChartLayout
+                    data={weatherData}
+                    contractInfo={contractInfo}
+                    variant={activeTab === 'logbook' ? 'logbook' : 'standard'}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -175,29 +193,17 @@ export default function WeatherTool() {
         onGenerate={handleAutoGenerate}
       />
 
-      {/* WEATHER LOGS MODAL */}
+      {/* LOGS MODAL */}
       <WeatherLogsModal
         isOpen={isLogsOpen}
         onClose={() => setLogsOpen(false)}
         contractInfo={contractInfo}
         weatherData={weatherData}
-        onLoad={handleLoadSnapshot}
+        onLoad={(info, data) => {
+          setContractInfo(info);
+          setWeatherData(data);
+        }}
       />
-
-      {/* PRINT OVERLAY — controlled by CSS */}
-      <div className="wt-printable">
-        {activeTab === 'report' ? (
-          <ReportView data={weatherData} contractInfo={contractInfo} />
-        ) : activeTab === 'standard-format' ? (
-          <StandardFormatView data={weatherData} contractInfo={contractInfo} />
-        ) : (
-          <ChartLayout
-            data={weatherData}
-            contractInfo={contractInfo}
-            variant={activeTab === 'logbook' ? 'logbook' : 'standard'}
-          />
-        )}
-      </div>
 
     </div>
   );

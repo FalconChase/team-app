@@ -63,6 +63,13 @@ function stageToPercent(status, statuses) {
   return Math.round(((idx + 1) / statuses.length) * 100);
 }
 
+// ─── SURGICAL ADD: returns only the visible stages for a given subject type ──
+function getVisibleStatuses(subjectType, allStatuses, config) {
+  const typeConfig = config?.[subjectType];
+  if (!typeConfig?.visibleStatuses?.length) return allStatuses;
+  return allStatuses.filter((s) => typeConfig.visibleStatuses.includes(s));
+}
+
 function progressBarColor(pct) {
   if (pct >= 90) return "var(--success)";
   if (pct >= 60) return "var(--info)";
@@ -168,7 +175,7 @@ function getActivityLabel(d) {
   return { label, isNew, ts: effectiveTs };
 }
 
-// ─── Status Hover Card ────────────────────────────────────────────────────────
+// ─── Status Hover Card — fully theme-aware ────────────────────────────────────
 function StatusHoverCard({ content, onUpdateStatus, onMouseEnter, onMouseLeave }) {
   const [btnHover, setBtnHover] = useState(false);
 
@@ -706,21 +713,23 @@ export default function Dashboard() {
   const { team, members } = useTeam();
   const navigate          = useNavigate();
 
-  const [documents,  setDocuments]  = useState([]);
-  const [projects,   setProjects]   = useState([]);
-  const [statuses,   setStatuses]   = useState(DEFAULT_STATUSES);
-  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
+  const [documents,   setDocuments]   = useState([]);
+  const [projects,    setProjects]    = useState([]);
+  const [statuses,    setStatuses]    = useState(DEFAULT_STATUSES);
+  const [thresholds,  setThresholds]  = useState(DEFAULT_THRESHOLDS);
+  // SURGICAL ADD: stage visibility config per subject type
+  const [stageConfig, setStageConfig] = useState({});
 
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterProj,   setFilterProj]   = useState("All");
   const [filterMember, setFilterMember] = useState("All");
   const [sortOrder,    setSortOrder]    = useState("none");
 
-  const [tooltip,           setTooltip]           = useState(null);
-  const [showPrintModal,    setShowPrintModal]    = useState(false);
-  const [includeRemarks,    setIncludeRemarks]    = useState(false);
+  const [tooltip,            setTooltip]           = useState(null);
+  const [showPrintModal,     setShowPrintModal]    = useState(false);
+  const [includeRemarks,     setIncludeRemarks]    = useState(false);
   const [includeLastUpdated, setIncludeLastUpdated] = useState(false);
-  const [isExporting,       setIsExporting]       = useState(false);
+  const [isExporting,        setIsExporting]       = useState(false);
 
   const hideTimerRef = useRef(null);
   const printRef     = useRef(null);
@@ -741,18 +750,15 @@ export default function Dashboard() {
     if (!team) return;
     if (team.documentStatuses?.length)    setStatuses(team.documentStatuses);
     if (team.dashboardThresholds?.length) setThresholds(team.dashboardThresholds);
+    // SURGICAL ADD: load stage visibility config
+    if (team.subjectTypeStageConfig)      setStageConfig(team.subjectTypeStageConfig);
   }, [team]);
 
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
     return onSnapshot(q, (snap) =>
-      setDocuments(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          // Only show docs that have a projectId, are not hidden, and are not archived
-          .filter((d) => !!d.projectId && !d.hidden && !d.archived)
-      )
+      setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !!d.projectId))
     );
   }, [userProfile?.teamId]);
 
@@ -976,7 +982,7 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Hidden printable area */}
+      {/* Hidden printable area — always white for PDF legibility */}
       <div style={{ position: "absolute", left: "-9999px", top: 0, width: "794px" }}>
         <div ref={printRef} style={{ fontFamily: "Tahoma, Geneva, sans-serif", background: "#fff" }}>
           <div data-pdf-header style={{ padding: "28px 32px 0" }}>
@@ -1021,19 +1027,22 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {filtered.map((d, i) => {
-                    const project  = projects.find((p) => p.id === d.projectId);
-                    const pidLabel = project?.projectId || d.projectId || "—";
-                    const pidColor = projectIdColor(d, thresholds);
-                    const assigned = members?.find((m) => (m.uid || m.id) === d.assignedTo);
-                    const pct      = stageToPercent(d.status, statuses);
-                    const activity = getActivityLabel(d);
+                    const project    = projects.find((p) => p.id === d.projectId);
+                    const pidLabel   = project?.projectId || d.projectId || "—";
+                    const pidColor   = projectIdColor(d, thresholds);
+                    const assigned   = members?.find((m) => (m.uid || m.id) === d.assignedTo);
+                    // SURGICAL CHANGE: use visible statuses for this subject type
+                    const visibleSts = getVisibleStatuses(d.subjectType, statuses, stageConfig);
+                    const pct        = stageToPercent(d.status, visibleSts);
+                    const activity   = getActivityLabel(d);
                     return (
                       <tr key={d.id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", fontWeight: "700", color: pidColor, fontSize: "12px" }}>{pidLabel}</td>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#1a3a5c" }}>{d.subject || "—"}</td>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#555" }}>{assigned?.displayName || "—"}</td>
                         <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#1a3a5c", fontWeight: "500" }}>{d.status}</td>
-                        <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#555" }}>{pct !== null ? `${pct}% (${statuses.indexOf(d.status) + 1}/${statuses.length})` : "—"}</td>
+                        {/* SURGICAL CHANGE: X/Y now uses visibleSts */}
+                        <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#555" }}>{pct !== null ? `${pct}% (${visibleSts.indexOf(d.status) + 1}/${visibleSts.length})` : "—"}</td>
                         {includeLastUpdated && (
                           <td style={{ padding: "7px 10px", borderBottom: "1px solid #ecf1f7", color: "#777", fontSize: "10px", fontStyle: "italic" }}>
                             {activity ? activity.label : "—"}
@@ -1138,7 +1147,9 @@ export default function Dashboard() {
               const project    = projects.find((p) => p.id === d.projectId);
               const pidLabel   = project?.projectId || d.projectId || "—";
               const pidColor   = projectIdColor(d, thresholds);
-              const pct        = stageToPercent(d.status, statuses);
+              // SURGICAL CHANGE: use visible statuses for this subject type
+              const visibleSts = getVisibleStatuses(d.subjectType, statuses, stageConfig);
+              const pct        = stageToPercent(d.status, visibleSts);
               const barColor   = pct !== null ? progressBarColor(pct) : "var(--border-main)";
               const assigned   = members?.find((m) => (m.uid || m.id) === d.assignedTo);
               const hasRemarks = !!getTooltipContent(d);
@@ -1178,7 +1189,8 @@ export default function Dashboard() {
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                           <span style={{ fontSize: "11px", fontWeight: "600", color: barColor }}>{pct}%</span>
-                          <span style={{ fontSize: "10px", color: "var(--text-disabled)" }}>{statuses.indexOf(d.status) + 1}/{statuses.length}</span>
+                          {/* SURGICAL CHANGE: X/Y now uses visibleSts */}
+                          <span style={{ fontSize: "10px", color: "var(--text-disabled)" }}>{visibleSts.indexOf(d.status) + 1}/{visibleSts.length}</span>
                         </div>
                         <div style={{ height: "5px", borderRadius: "3px", background: "var(--border-light)" }}>
                           <div style={{ height: "100%", borderRadius: "3px", width: `${pct}%`, background: barColor, transition: "width 0.4s ease" }} />

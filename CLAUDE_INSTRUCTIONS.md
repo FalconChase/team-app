@@ -128,6 +128,12 @@ And paste the output here so I can confirm the commit hash matches what GitHub r
 - If the raw content doesn't match what was reportedly just pushed, say so clearly and ask me to wait 2-3 minutes before re-fetching
 - **This rule protects every other rule — stale code breaks everything downstream**
 
+### 10. File fetching vs. pasting guideline
+- **Fetch via raw GitHub URL only for stable/config files** not touched in recent commits
+- **For any file modified in recent sessions, paste directly from VSCode** — do not rely on fetch
+- If fetched code looks shorter than expected or appears to be missing features, **stop and ask the user to paste** — do not proceed on stale code
+- Apply changes **manually (surgical edit) if under ~20 lines**; only request a full rewrite if changes are too scattered to locate manually
+
 ## How to Start a New Thread
 1. Paste this URL to Claude:
    `https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md`

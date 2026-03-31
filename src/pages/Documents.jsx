@@ -23,7 +23,6 @@ export const DEFAULT_STATUSES = [
   "FOR SCANNING",
   "FOR APPROVAL IN PCMA",
   "FOR SUBMISSION ON GOOGLE DOCS",
-  "ARCHIVED",
 ];
 
 const DEFAULT_SUBJECT_TYPES = [
@@ -35,9 +34,14 @@ const DEFAULT_SUBJECT_TYPES = [
   "RPDM",
   "REVISED PLAN",
   "AS BUILT PLAN",
+  "CERTIFICATE OF COMPLETION",
+  "CERTIFICATE OF ACCEPTANCE",
 ];
 
 const NUMBERED_TYPES = new Set(["V.O.", "CTE", "W.S.O.", "W.R.O.", "RPDM"]);
+
+// ─── Closure subject types ────────────────────────────────────────────────────
+const CLOSURE_TYPES = new Set(["CERTIFICATE OF COMPLETION", "CERTIFICATE OF ACCEPTANCE"]);
 
 const DEFAULT_LACKING_ITEMS = {
   "AS-STAKED PLAN": ["Location Plan", "As-Staked Drawing", "Survey Notes", "Contractor's Certification"],
@@ -62,7 +66,6 @@ const STATUS_COLORS = {
   "FOR SCANNING":                  ["#e8f4fd", "#1565c0"],
   "FOR APPROVAL IN PCMA":          ["#e8f5e9", "#2d6e12"],
   "FOR SUBMISSION ON GOOGLE DOCS": ["#f0eee8", "#5a5a5a"],
-  "ARCHIVED":                      ["#f0f0f0", "#6b6b6b"],
 };
 
 const toKey   = (str) => str.replace(/\s+/g, "_");
@@ -83,6 +86,16 @@ function composeLabel(type, num, rpdmRef) {
     case "RPDM":   return `${ordinal(+num)} RPDM due to ${rpdmRef || "—"}`;
     default:       return type;
   }
+}
+
+// ─── Stage visibility helper ──────────────────────────────────────────────────
+// Returns the filtered status list for a given subject type.
+// If no config exists for the type, all statuses are returned unchanged.
+function getVisibleStatuses(subjectType, allStatuses, config) {
+  const typeConfig = config?.[subjectType];
+  if (!typeConfig?.visibleStatuses?.length) return allStatuses;
+  // Preserve master list order, only include configured visible ones
+  return allStatuses.filter((s) => typeConfig.visibleStatuses.includes(s));
 }
 
 const S = {
@@ -120,7 +133,6 @@ const S = {
   chkRow:     { display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "12px", cursor: "pointer", userSelect: "none", color: "var(--text-primary)" },
 };
 
-// Inject the drain keyframe animation once into the document head
 function ensureDrainStyle() {
   const id = "lacking-drain-keyframes";
   if (!document.getElementById(id)) {
@@ -129,75 +141,6 @@ function ensureDrainStyle() {
     el.textContent = `@keyframes lackingDrain { from { width: 100%; } to { width: 0%; } }`;
     document.head.appendChild(el);
   }
-}
-
-// ─── ArchiveWarningModal ──────────────────────────────────────────────────────
-function ArchiveWarningModal({ subject, onConfirm, onCancel }) {
-  const [confirmed, setConfirmed] = useState(false);
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(10,24,40,0.7)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: "14px", width: "100%", maxWidth: "460px", boxShadow: "var(--shadow-lg)", border: "1px solid var(--border-main)", overflow: "hidden" }}>
-
-        {/* Header */}
-        <div style={{ background: "#a32d2d", padding: "18px 24px" }}>
-          <div style={{ fontSize: "15px", fontWeight: "700", color: "#fff" }}>🗄️ Archive Document?</div>
-          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.75)", marginTop: "4px" }}>This action requires your confirmation.</div>
-        </div>
-
-        <div style={{ padding: "20px 24px" }}>
-          {/* Document preview */}
-          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-main)", borderRadius: "8px", padding: "10px 14px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: "700", letterSpacing: "0.5px", marginBottom: "4px" }}>Document</div>
-            <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)" }}>{subject || "—"}</div>
-          </div>
-
-          {/* Warning list */}
-          <div style={{ background: "#fcebeb", border: "1px solid #e8b4b4", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "11px", fontWeight: "700", color: "#a32d2d", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.4px" }}>⚠ Before you proceed</div>
-            <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px", color: "#6b1a1a", lineHeight: "1.8" }}>
-              <li>This document will be <strong>permanently archived</strong>.</li>
-              <li>It will be <strong>hidden</strong> from the Dashboard and Documents tab.</li>
-              <li>This action <strong>cannot be undone</strong>.</li>
-              <li style={{ color: "#8a6000", fontStyle: "italic" }}>
-                📋 Any proposed edits to an archived document will require permission from the respective section or authorized personnel.
-              </li>
-            </ul>
-          </div>
-
-          {/* Confirmation checkbox */}
-          <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", marginBottom: "20px" }}>
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-              style={{ marginTop: "2px", flexShrink: 0 }}
-            />
-            <span style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.5" }}>
-              I understand that archiving this document is <strong>permanent</strong> and cannot be undone.
-            </span>
-          </label>
-
-          {/* Buttons */}
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={onCancel}
-              style={{ fontSize: "12px", padding: "9px 20px", borderRadius: "7px", border: "1px solid var(--border-input)", background: "var(--bg-secondary)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={!confirmed}
-              style={{ fontSize: "12px", padding: "9px 20px", borderRadius: "7px", border: "none", background: confirmed ? "#a32d2d" : "var(--bg-secondary)", color: confirmed ? "#fff" : "var(--text-disabled)", cursor: confirmed ? "pointer" : "not-allowed", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", transition: "all 0.15s" }}
-            >
-              🗄️ Archive Permanently
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ─── LackingItem ──────────────────────────────────────────────────────────────
@@ -264,7 +207,7 @@ function LackingItem({ item, isCustom, onToggle, onRemove }) {
 // DetailsPanel
 // ═══════════════════════════════════════════════════════════════════════════════
 function DetailsPanel({
-  document: d, statuses, members, adminMode,
+  document: d, statuses, stageConfig, members, adminMode,
   onStatusChange, onSaveDetails, onToggleLacking,
   onRemoveLackingItem, onClearCompleted,
   onAddCustomItem, onAssignMember, onDelete,
@@ -272,39 +215,14 @@ function DetailsPanel({
   const { status } = d;
   const key = toKey(status);
 
-  const [localData,      setLocalData]      = useState(() => d.statusDetails?.[key] || {});
-  const [newItem,        setNewItem]        = useState("");
-  const [saving,         setSaving]         = useState(false);
-  const [pendingArchive, setPendingArchive] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState(status);
+  const [localData, setLocalData] = useState(() => d.statusDetails?.[key] || {});
+  const [newItem,   setNewItem]   = useState("");
+  const [saving,    setSaving]    = useState(false);
 
   useEffect(() => { ensureDrainStyle(); }, []);
-  useEffect(() => {
-    setLocalData(d.statusDetails?.[toKey(d.status)] || {});
-    setSelectedStatus(d.status);
-  }, [d.id, d.status, JSON.stringify(d.statusDetails)]);
+  useEffect(() => { setLocalData(d.statusDetails?.[toKey(d.status)] || {}); }, [d.id, d.status, JSON.stringify(d.statusDetails)]);
 
   async function handleSave() { setSaving(true); await onSaveDetails(status, localData); setSaving(false); }
-
-  function handleStatusDropdownChange(newSt) {
-    if (newSt === "ARCHIVED") {
-      setSelectedStatus("ARCHIVED");
-      setPendingArchive(true);
-    } else {
-      setSelectedStatus(newSt);
-      onStatusChange(newSt);
-    }
-  }
-
-  function handleArchiveConfirm() {
-    setPendingArchive(false);
-    onStatusChange("ARCHIVED");
-  }
-
-  function handleArchiveCancel() {
-    setPendingArchive(false);
-    setSelectedStatus(d.status);
-  }
 
   const lacking  = d.statusDetails?.["LACKING"] || { items: [], customItems: [] };
   const allItems = [...(lacking.items || []), ...(lacking.customItems || [])];
@@ -315,22 +233,27 @@ function DetailsPanel({
   const isEarlyStatus  = status === "PRECOMPILING" || status === "FOR DoTS";
   const assignedMember = members?.find((m) => (m.uid || m.id) === d.assignedTo);
 
-  // Statuses shown in dropdown — exclude ARCHIVED from the change dropdown
-  // (archiving is done via the intercept, not a normal status change)
-  const dropdownStatuses = statuses.filter(st => st !== "ARCHIVED");
+  // ── Filter statuses by subject type config ────────────────────────────────
+  const visibleStatuses = getVisibleStatuses(d.subjectType, statuses, stageConfig);
+
+  const isClosureType = CLOSURE_TYPES.has(d.subjectType);
 
   return (
     <div style={{ maxWidth: "600px" }}>
 
-      {pendingArchive && (
-        <ArchiveWarningModal
-          subject={d.subject}
-          onConfirm={handleArchiveConfirm}
-          onCancel={handleArchiveCancel}
-        />
+      {/* Closure document notice */}
+      {isClosureType && (
+        <div style={{
+          marginBottom: "14px", background: "var(--info-bg, #e8f4fd)",
+          border: "1px solid var(--info, #1565c0)", borderRadius: "6px",
+          padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)",
+          fontWeight: "600",
+        }}>
+          📋 Closure Document — {d.subjectType}
+        </div>
       )}
 
-      {isEarlyStatus && (
+      {isEarlyStatus && !isClosureType && (
         <div style={{ marginBottom: "14px", background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--warning)" }}>
           ⏳ DoTS details to be updated soon.
         </div>
@@ -355,17 +278,10 @@ function DetailsPanel({
       {adminMode && (
         <>
           <div style={S.sectionLabel}>Change Status</div>
-          <select
-            style={{ ...S.select, marginBottom: "4px" }}
-            value={selectedStatus}
-            onChange={(e) => handleStatusDropdownChange(e.target.value)}
-          >
-            {dropdownStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
-            <option value="ARCHIVED" style={{ color: "#a32d2d", fontWeight: "600" }}>🗄️ ARCHIVED (permanent)</option>
+          {/* ── Uses filtered visibleStatuses ── */}
+          <select style={{ ...S.select, marginBottom: "4px" }} value={status} onChange={(e) => onStatusChange(e.target.value)}>
+            {visibleStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
-          <div style={{ fontSize: "10px", color: "var(--text-muted)", fontStyle: "italic", marginBottom: "4px" }}>
-            Selecting ARCHIVED will permanently hide this document from all views.
-          </div>
           <div style={S.divider} />
         </>
       )}
@@ -398,9 +314,6 @@ function DetailsPanel({
                 <button
                   onClick={onClearCompleted}
                   style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", cursor: "pointer", border: "1px solid var(--danger)", background: "var(--danger-bg)", color: "var(--danger)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontWeight: "600" }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = "0.8"}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
-                  title="Remove all checked items immediately"
                 >
                   ✕ Clear completed
                 </button>
@@ -466,7 +379,7 @@ function DetailsPanel({
         </div>
       )}
 
-      {!["FOR DoTS", "LACKING", "FOR APPROVAL", "ARCHIVED"].includes(status) && (
+      {!["FOR DoTS", "LACKING", "FOR APPROVAL"].includes(status) && (
         <div>
           <label style={S.label}>Notes / Remarks</label>
           <textarea style={{ ...S.input, resize: "vertical", minHeight: "64px" }} value={localData.notes || ""}
@@ -489,7 +402,7 @@ function DetailsPanel({
 // ═══════════════════════════════════════════════════════════════════════════════
 // AddDocumentModal
 // ═══════════════════════════════════════════════════════════════════════════════
-function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, members, adminMode, onSave, onClose }) {
+function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subjectTypes, members, adminMode, onSave, onClose }) {
   const needsNum = NUMBERED_TYPES.has(form.subjectType);
   const isRpdm   = form.subjectType === "RPDM";
   const preview  = needsNum ? composeLabel(form.subjectType, form.subjectNum, form.rpdmRef) : null;
@@ -497,8 +410,10 @@ function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, mem
 
   async function handleSave() { setSaving(true); await onSave(); setSaving(false); }
 
-  // Exclude ARCHIVED from the add form — you can't create a doc already archived
-  const addableStatuses = statuses.filter(st => st !== "ARCHIVED");
+  // ── Filter statuses for the currently selected subject type ───────────────
+  const visibleStatuses = getVisibleStatuses(form.subjectType, statuses, stageConfig);
+
+  const isClosureType = CLOSURE_TYPES.has(form.subjectType);
 
   return (
     <div style={S.modal} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -512,9 +427,33 @@ function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, mem
         </select>
 
         <label style={S.label}>Subject Type *</label>
-        <select style={{ ...S.input, marginBottom: "12px" }} value={form.subjectType} onChange={(e) => setForm((f) => ({ ...f, subjectType: e.target.value, subjectNum: 1, rpdmRef: "" }))}>
+        <select style={{ ...S.input, marginBottom: "12px" }} value={form.subjectType}
+          onChange={(e) => {
+            const newType = e.target.value;
+            const newVisible = getVisibleStatuses(newType, statuses, stageConfig);
+            setForm((f) => ({
+              ...f,
+              subjectType: newType,
+              subjectNum: 1,
+              rpdmRef: "",
+              // Reset status to first visible stage for the new type
+              status: newVisible[0] || statuses[0],
+            }));
+          }}>
           {subjectTypes.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
+
+        {/* Closure document notice */}
+        {isClosureType && (
+          <div style={{
+            marginBottom: "12px", background: "var(--info-bg, #e8f4fd)",
+            border: "1px solid var(--info, #1565c0)", borderRadius: "6px",
+            padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)",
+            fontWeight: "600",
+          }}>
+            📋 Closure Document — applicable stages have been pre-filtered.
+          </div>
+        )}
 
         {needsNum && (
           <>
@@ -537,8 +476,9 @@ function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, mem
         )}
 
         <label style={S.label}>Initial Status</label>
+        {/* ── Uses filtered visibleStatuses ── */}
         <select style={{ ...S.input, marginBottom: "12px" }} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-          {addableStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
+          {visibleStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
 
         <label style={S.label}>DoTS Date</label>
@@ -629,12 +569,10 @@ export default function Documents() {
     pendingScrollId.current = null;
   }, [documents]);
 
-  const getStage  = (s) => {
-    // ARCHIVED is not part of the stage count
-    if (s === "ARCHIVED") return "Archived";
-    const i = statuses.filter(st => st !== "ARCHIVED").indexOf(s);
-    return i === -1 ? "—" : `${i + 1}/${statuses.filter(st => st !== "ARCHIVED").length}`;
-  };
+  // ── Read stage config from team ───────────────────────────────────────────
+  const stageConfig = team?.subjectTypeStageConfig || {};
+
+  const getStage  = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
   const toggleRow = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   function modifierFields() {
@@ -666,22 +604,10 @@ export default function Documents() {
   }
 
   async function handleStatusChange(docId, newStatus) {
-    const isArchiving = newStatus === "ARCHIVED";
     await updateDoc(doc(db, "papers", docId), {
       status: newStatus,
-      ...(isArchiving ? {
-        hidden: true,
-        archivedAt: serverTimestamp(),
-        archivedBy: userProfile.displayName || userProfile.email || "Unknown",
-      } : {}),
       ...modifierFields(),
-      activityLog: arrayUnion({
-        text: isArchiving
-          ? `Document archived by ${userProfile.displayName}`
-          : `Status updated to "${newStatus}"`,
-        by: userProfile.displayName,
-        at: new Date().toISOString(),
-      }),
+      activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
   }
 
@@ -737,17 +663,11 @@ export default function Documents() {
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
-  // Exclude archived docs from the main list and from the status filter
   const filtered = documents.filter(
     (d) => d.projectId &&
-      d.status !== "ARCHIVED" &&
-      !d.hidden &&
       (filterStatus === "All" || d.status === filterStatus) &&
       (filterProj   === "All" || d.projectId === filterProj)
   );
-
-  // Status filter dropdown also excludes ARCHIVED
-  const filterableStatuses = statuses.filter(st => st !== "ARCHIVED");
 
   const admin = isAdmin();
 
@@ -761,7 +681,7 @@ export default function Documents() {
       <div style={S.filters}>
         <select style={S.select} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="All">All Statuses</option>
-          {filterableStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
+          {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
         <select style={S.select} value={filterProj} onChange={(e) => setFilterProj(e.target.value)}>
           <option value="All">All Projects</option>
@@ -816,6 +736,7 @@ export default function Documents() {
                         <DetailsPanel
                           document={d}
                           statuses={statuses}
+                          stageConfig={stageConfig}
                           members={members}
                           adminMode={admin}
                           onStatusChange={(newSt)           => handleStatusChange(d.id, newSt)}
@@ -840,7 +761,7 @@ export default function Documents() {
       {showForm && (
         <AddDocumentModal
           form={form} setForm={setForm} projects={projects} statuses={statuses}
-          subjectTypes={subjectTypes} members={members} adminMode={admin}
+          stageConfig={stageConfig} subjectTypes={subjectTypes} members={members} adminMode={admin}
           onSave={saveDocument}
           onClose={() => { setShowForm(false); setForm(BLANK_FORM); }}
         />

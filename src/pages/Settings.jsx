@@ -9,6 +9,7 @@ import { DEFAULT_STATUSES } from "./Documents";
 const DEFAULT_SUBJECT_TYPES = [
   "AS-STAKED PLAN", "V.O.", "CTE", "W.S.O.",
   "W.R.O.", "RPDM", "REVISED PLAN", "AS BUILT PLAN",
+  "CERTIFICATE OF COMPLETION", "CERTIFICATE OF ACCEPTANCE",
 ];
 
 // ─── Default thresholds (mirrors Dashboard.jsx hardcoded values) ─────────────
@@ -172,7 +173,7 @@ function ConfirmBanner({ message, onConfirm, onCancel }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 0 — Theme Control (NEW)
+// SECTION 0 — Theme Control
 // ═══════════════════════════════════════════════════════════════════════════════
 function ThemeControlSection({ teamId }) {
   const [currentTheme, setCurrentTheme] = useState("default");
@@ -195,17 +196,13 @@ function ThemeControlSection({ teamId }) {
   async function handleThemeChange(themeId) {
     setSaving(true);
     try {
-      // Save to Firestore
       await setDoc(
         doc(db, "appSettings", teamId),
         { theme: themeId, updatedAt: new Date().toISOString() },
         { merge: true }
       );
-      
-      // Apply immediately
       setCurrentTheme(themeId);
       document.documentElement.setAttribute("data-theme", themeId);
-      
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -245,51 +242,23 @@ function ThemeControlSection({ teamId }) {
             <span style={{ fontSize: "28px", lineHeight: 1 }}>{theme.emoji}</span>
             <div style={{ flex: 1 }}>
               <div style={{
-                fontSize: "13px",
-                fontWeight: "700",
+                fontSize: "13px", fontWeight: "700",
                 color: currentTheme === theme.id ? "var(--primary)" : "var(--text-primary)",
                 marginBottom: "2px",
               }}>
                 {theme.name}
               </div>
-              <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
-                {theme.desc}
-              </div>
+              <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>{theme.desc}</div>
             </div>
             {currentTheme === theme.id && (
-              <span style={{
-                fontSize: "14px",
-                color: "var(--primary)",
-                fontWeight: "700",
-              }}>✓</span>
+              <span style={{ fontSize: "14px", color: "var(--primary)", fontWeight: "700" }}>✓</span>
             )}
           </div>
         ))}
       </div>
 
-      {saved && (
-        <div style={{
-          fontSize: "11px",
-          color: "var(--success)",
-          background: "var(--success-bg)",
-          padding: "8px 12px",
-          borderRadius: "6px",
-          textAlign: "center",
-        }}>
-          ✓ Theme applied successfully
-        </div>
-      )}
-
-      {saving && (
-        <div style={{
-          fontSize: "11px",
-          color: "var(--text-secondary)",
-          textAlign: "center",
-          fontStyle: "italic",
-        }}>
-          Applying theme...
-        </div>
-      )}
+      {saved   && <div style={{ fontSize: "11px", color: "var(--success)", background: "var(--success-bg)", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>✓ Theme applied successfully</div>}
+      {saving  && <div style={{ fontSize: "11px", color: "var(--text-secondary)", textAlign: "center", fontStyle: "italic" }}>Applying theme...</div>}
     </div>
   );
 }
@@ -367,9 +336,7 @@ function TeamProfileSection({ team, updateTeamSettings }) {
             Share this code with new members to join your team.
           </div>
         </div>
-        <button style={S.btn(false, false, true)} onClick={() => setConfirmRegen(true)}>
-          Regenerate
-        </button>
+        <button style={S.btn(false, false, true)} onClick={() => setConfirmRegen(true)}>Regenerate</button>
       </div>
 
       {confirmRegen && (
@@ -394,7 +361,7 @@ function TeamProfileSection({ team, updateTeamSettings }) {
 // SECTION 2 — Member Management
 // ═══════════════════════════════════════════════════════════════════════════════
 function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin, removeMember }) {
-  const [confirmAction, setConfirmAction] = useState(null); // { type, member }
+  const [confirmAction, setConfirmAction] = useState(null);
 
   async function executeAction() {
     const { type, member } = confirmAction;
@@ -416,8 +383,8 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
       <div style={S.sDesc}>Manage roles and access for all active team members.</div>
 
       {members.map((m) => {
-        const isSelf  = m.uid === currentUser?.uid || m.id === currentUser?.uid;
-        const isAdm   = m.role === "admin" || m.role === "manager" || m.role === "supervisor";
+        const isSelf = m.uid === currentUser?.uid || m.id === currentUser?.uid;
+        const isAdm  = m.role === "admin" || m.role === "manager" || m.role === "supervisor";
 
         return (
           <div key={m.id || m.uid} style={S.memberRow}>
@@ -469,7 +436,7 @@ function StatusListSection({ statuses, onSave, papers }) {
   const [newItem, setNewItem] = useState("");
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
-  const [confirm, setConfirm] = useState(null); // { index, label, affectedCount, nearestLabel }
+  const [confirm, setConfirm] = useState(null);
 
   useEffect(() => { setList([...statuses]); }, [JSON.stringify(statuses)]);
 
@@ -489,38 +456,24 @@ function StatusListSection({ statuses, onSave, papers }) {
   }
 
   function requestDelete(index) {
-    const label        = list[index];
-    const affected     = (papers || []).filter((p) => p.status === label);
-    const nearestIdx   = index > 0 ? index - 1 : index + 1;
+    const label      = list[index];
+    const affected   = (papers || []).filter((p) => p.status === label);
+    const nearestIdx = index > 0 ? index - 1 : index + 1;
     const nearestLabel = list[nearestIdx] || null;
 
     if (affected.length === 0) {
-      // No documents affected — delete immediately
       setList((l) => l.filter((_, i) => i !== index));
       return;
     }
-
-    setConfirm({
-      index,
-      label,
-      affectedCount: affected.length,
-      nearestLabel,
-    });
+    setConfirm({ index, label, affectedCount: affected.length, nearestLabel });
   }
 
   async function executeDelete() {
     const { index, label, nearestLabel } = confirm;
-
-    // Move affected documents to nearest status first
     if (nearestLabel) {
       const affected = (papers || []).filter((p) => p.status === label);
-      await Promise.all(
-        affected.map((p) =>
-          updateDoc(doc(db, "papers", p.id), { status: nearestLabel })
-        )
-      );
+      await Promise.all(affected.map((p) => updateDoc(doc(db, "papers", p.id), { status: nearestLabel })));
     }
-
     setList((l) => l.filter((_, i) => i !== index));
     setConfirm(null);
   }
@@ -544,20 +497,15 @@ function StatusListSection({ statuses, onSave, papers }) {
         <div key={st} style={S.statusRow}>
           <span style={S.stageNum}>{i + 1}/{list.length}</span>
           <span style={{ flex: 1, fontSize: "12px", fontWeight: "500", color: "var(--text-primary)" }}>{st}</span>
-          <button style={S.iconBtn()} onClick={() => move(i, -1)} disabled={i === 0}
-            title="Move up">↑</button>
-          <button style={S.iconBtn()} onClick={() => move(i, 1)} disabled={i === list.length - 1}
-            title="Move down">↓</button>
+          <button style={S.iconBtn()} onClick={() => move(i, -1)} disabled={i === 0} title="Move up">↑</button>
+          <button style={S.iconBtn()} onClick={() => move(i, 1)} disabled={i === list.length - 1} title="Move down">↓</button>
           <button style={S.iconBtn(true)} onClick={() => requestDelete(i)} title="Delete">✕</button>
         </div>
       ))}
 
-      {/* Add new status */}
       <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
         <input
-          style={{ ...S.input, flex: 1 }}
-          value={newItem}
-          placeholder="New status name…"
+          style={{ ...S.input, flex: 1 }} value={newItem} placeholder="New status name…"
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addStatus(); }}
         />
@@ -590,7 +538,7 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
   const [newItem, setNewItem] = useState("");
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
-  const [blocked, setBlocked] = useState(null); // label of blocked delete
+  const [blocked, setBlocked] = useState(null);
 
   useEffect(() => { setList([...subjectTypes]); }, [JSON.stringify(subjectTypes)]);
 
@@ -602,8 +550,8 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
   }
 
   function requestDelete(index) {
-    const label    = list[index];
-    const inUse    = (papers || []).some((p) => p.subjectType === label);
+    const label = list[index];
+    const inUse = (papers || []).some((p) => p.subjectType === label);
     if (inUse) {
       setBlocked(label);
       setTimeout(() => setBlocked(null), 3000);
@@ -657,9 +605,7 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
 
       <div style={{ display: "flex", gap: "8px" }}>
         <input
-          style={{ ...S.input, flex: 1 }}
-          value={newItem}
-          placeholder="New subject type…"
+          style={{ ...S.input, flex: 1 }} value={newItem} placeholder="New subject type…"
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addType(); }}
         />
@@ -677,12 +623,190 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 4B — Subject Stage Visibility Config  ← NEW
+// ═══════════════════════════════════════════════════════════════════════════════
+function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
+  // config shape: { [subjectType]: { visibleStatuses: string[] } }
+  // We keep a local draft of the whole config and save once.
+  const [draft,       setDraft]       = useState(config || {});
+  const [expanded,    setExpanded]    = useState(null); // which subject type is open
+  const [saving,      setSaving]      = useState(false);
+  const [saved,       setSaved]       = useState(false);
+
+  // Keep draft in sync if team data reloads
+  useEffect(() => { setDraft(config || {}); }, [JSON.stringify(config)]);
+
+  // For a given type, return its visible set (or all if unconfigured)
+  function getVisible(type) {
+    return draft[type]?.visibleStatuses ?? [...statuses];
+  }
+
+  function toggleStatus(type, status) {
+    const current = getVisible(type);
+    const next    = current.includes(status)
+      ? current.filter((s) => s !== status)
+      : [...current, status];
+
+    // Preserve master list order
+    const ordered = statuses.filter((s) => next.includes(s));
+
+    // If all stages are visible, remove the config entry entirely (clean default)
+    if (ordered.length === statuses.length) {
+      setDraft((prev) => {
+        const updated = { ...prev };
+        delete updated[type];
+        return updated;
+      });
+    } else {
+      setDraft((prev) => ({
+        ...prev,
+        [type]: { visibleStatuses: ordered },
+      }));
+    }
+  }
+
+  function resetType(type) {
+    setDraft((prev) => {
+      const updated = { ...prev };
+      delete updated[type];
+      return updated;
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(draft);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const hasConfig = (type) => !!draft[type]?.visibleStatuses;
+
+  return (
+    <div style={S.section}>
+      <div style={S.sTitle}>Subject Stage Visibility</div>
+      <div style={S.sDesc}>
+        Control which stages are visible per subject type. Types with no custom config show all stages.
+        Toggle off the stages that don't apply to a specific subject type.
+      </div>
+
+      {subjectTypes.map((type) => {
+        const isOpen    = expanded === type;
+        const visible   = getVisible(type);
+        const isCustom  = hasConfig(type);
+        const hiddenCnt = statuses.length - visible.length;
+
+        return (
+          <div key={type} style={{
+            border: "0.5px solid var(--border-main)",
+            borderRadius: "8px", marginBottom: "8px",
+            overflow: "hidden",
+            background: isOpen ? "var(--bg-secondary)" : "var(--bg-hover)",
+          }}>
+            {/* ── Row header ── */}
+            <div
+              onClick={() => setExpanded(isOpen ? null : type)}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "10px 14px", cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)" }}>{type}</span>
+                {isCustom && hiddenCnt > 0 && (
+                  <span style={{
+                    fontSize: "10px", padding: "1px 7px", borderRadius: "8px",
+                    background: "var(--warning-bg)", color: "var(--warning)",
+                    fontWeight: "600", border: "1px solid var(--warning)",
+                  }}>
+                    {hiddenCnt} hidden
+                  </span>
+                )}
+                {!isCustom && (
+                  <span style={{
+                    fontSize: "10px", padding: "1px 7px", borderRadius: "8px",
+                    background: "var(--bg-secondary)", color: "var(--text-disabled)",
+                    fontWeight: "500", border: "0.5px solid var(--border-light)",
+                  }}>
+                    all stages
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {isCustom && (
+                  <button
+                    style={{ ...S.btn(false, false, true), fontSize: "10px", padding: "2px 8px" }}
+                    onClick={(e) => { e.stopPropagation(); resetType(type); }}
+                    title="Reset to show all stages"
+                  >
+                    Reset
+                  </button>
+                )}
+                <span style={{
+                  fontSize: "11px", color: "var(--text-secondary)",
+                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  display: "inline-block", transition: "transform 0.15s",
+                }}>▾</span>
+              </div>
+            </div>
+
+            {/* ── Expanded toggle list ── */}
+            {isOpen && (
+              <div style={{
+                borderTop: "0.5px solid var(--border-light)",
+                padding: "12px 14px",
+                display: "flex", flexDirection: "column", gap: "4px",
+              }}>
+                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px", fontStyle: "italic" }}>
+                  Toggle off stages that don't apply to <strong>{type}</strong>.
+                  Hidden stages won't appear in the status dropdown for this subject type.
+                </div>
+                {statuses.map((status, idx) => {
+                  const isVisible = visible.includes(status);
+                  return (
+                    <div key={status} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "7px 10px", borderRadius: "6px",
+                      background: isVisible ? "var(--bg-card)" : "var(--bg-page)",
+                      border: `0.5px solid ${isVisible ? "var(--border-main)" : "var(--border-light)"}`,
+                      opacity: isVisible ? 1 : 0.5,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={S.stageNum}>{idx + 1}</span>
+                        <span style={{
+                          fontSize: "12px", fontWeight: "500",
+                          color: isVisible ? "var(--text-primary)" : "var(--text-disabled)",
+                          textDecoration: isVisible ? "none" : "line-through",
+                        }}>
+                          {status}
+                        </span>
+                      </div>
+                      <Toggle value={isVisible} onChange={() => toggleStatus(type, status)} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div style={S.saveBar}>
+        {saved && <span style={{ fontSize: "11px", color: "var(--success)", alignSelf: "center" }}>✓ Saved</span>}
+        <button style={S.btn(true)} onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Save Stage Config"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 5 — Dashboard Color Thresholds
 // ═══════════════════════════════════════════════════════════════════════════════
 function ThresholdsSection({ thresholds, onSave }) {
-  const [rows,   setRows]   = useState(
-    thresholds?.length ? [...thresholds] : [...DEFAULT_THRESHOLDS]
-  );
+  const [rows,   setRows]   = useState(thresholds?.length ? [...thresholds] : [...DEFAULT_THRESHOLDS]);
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
 
@@ -695,17 +819,13 @@ function ThresholdsSection({ thresholds, onSave }) {
   }
 
   function addRow() {
-    setRows((prev) => [
-      ...prev,
-      { id: `t_${Date.now()}`, days: 0, color: "#888888", label: "Custom" },
-    ]);
+    setRows((prev) => [...prev, { id: `t_${Date.now()}`, days: 0, color: "#888888", label: "Custom" }]);
   }
 
   function deleteRow(id) {
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
-  // Always sort ascending by days before saving
   async function handleSave() {
     setSaving(true);
     const sorted = [...rows].sort((a, b) => Number(a.days) - Number(b.days));
@@ -724,7 +844,6 @@ function ThresholdsSection({ thresholds, onSave }) {
         Rows are auto-sorted by days. Add as many levels as needed.
       </div>
 
-      {/* Column headers */}
       <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 1fr auto", gap: "8px", marginBottom: "6px" }}>
         {["Days ≥", "Color", "Label", ""].map((h) => (
           <div key={h} style={{ fontSize: "10px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase" }}>{h}</div>
@@ -733,42 +852,21 @@ function ThresholdsSection({ thresholds, onSave }) {
 
       {rows.map((r) => (
         <div key={r.id} style={S.thresholdRow}>
-          {/* Days */}
-          <input
-            type="number" min="1"
-            style={{ ...S.input, textAlign: "center" }}
-            value={r.days}
-            onChange={(e) => updateRow(r.id, "days", e.target.value)}
-          />
-          {/* Color picker + hex preview */}
+          <input type="number" min="1" style={{ ...S.input, textAlign: "center" }}
+            value={r.days} onChange={(e) => updateRow(r.id, "days", e.target.value)} />
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <input
-              type="color"
-              value={r.color}
-              onChange={(e) => updateRow(r.id, "color", e.target.value)}
-              style={{ width: "36px", height: "32px", borderRadius: "5px", border: "1px solid var(--border-input)", cursor: "pointer", padding: "2px" }}
-            />
-            <span style={{ fontSize: "11px", color: r.color, fontWeight: "700", fontFamily: "monospace" }}>
-              {r.color}
-            </span>
-            {/* Live preview */}
+            <input type="color" value={r.color} onChange={(e) => updateRow(r.id, "color", e.target.value)}
+              style={{ width: "36px", height: "32px", borderRadius: "5px", border: "1px solid var(--border-input)", cursor: "pointer", padding: "2px" }} />
+            <span style={{ fontSize: "11px", color: r.color, fontWeight: "700", fontFamily: "monospace" }}>{r.color}</span>
             <span style={{ fontSize: "12px", fontWeight: "700", color: r.color }}>25N00247</span>
           </div>
-          {/* Label */}
-          <input
-            style={S.input}
-            value={r.label}
-            placeholder="e.g. At Risk"
-            onChange={(e) => updateRow(r.id, "label", e.target.value)}
-          />
-          {/* Delete */}
+          <input style={S.input} value={r.label} placeholder="e.g. At Risk"
+            onChange={(e) => updateRow(r.id, "label", e.target.value)} />
           <button style={S.iconBtn(true)} onClick={() => deleteRow(r.id)}>✕</button>
         </div>
       ))}
 
-      <button style={{ ...S.btn(false, false, true), marginTop: "6px" }} onClick={addRow}>
-        + Add Threshold
-      </button>
+      <button style={{ ...S.btn(false, false, true), marginTop: "6px" }} onClick={addRow}>+ Add Threshold</button>
 
       <div style={S.saveBar}>
         {saved && <span style={{ fontSize: "11px", color: "var(--success)", alignSelf: "center" }}>✓ Saved</span>}
@@ -784,11 +882,11 @@ function ThresholdsSection({ thresholds, onSave }) {
 // SECTION 6 — Notification Preferences
 // ═══════════════════════════════════════════════════════════════════════════════
 function NotificationsSection({ prefs, onSave }) {
-  const [onLacking,     setOnLacking]     = useState(prefs?.onLacking     ?? true);
-  const [stagnantDays,  setStagnantDays]  = useState(prefs?.stagnantDays  ?? 15);
-  const [onApproved,    setOnApproved]    = useState(prefs?.onApproved     ?? false);
-  const [saving,        setSaving]        = useState(false);
-  const [saved,         setSaved]         = useState(false);
+  const [onLacking,    setOnLacking]    = useState(prefs?.onLacking    ?? true);
+  const [stagnantDays, setStagnantDays] = useState(prefs?.stagnantDays ?? 15);
+  const [onApproved,   setOnApproved]   = useState(prefs?.onApproved   ?? false);
+  const [saving,       setSaving]       = useState(false);
+  const [saved,        setSaved]        = useState(false);
 
   useEffect(() => {
     if (prefs) {
@@ -824,35 +922,20 @@ function NotificationsSection({ prefs, onSave }) {
         Configure when alerts appear in the app. Push notifications can be wired up in a future update.
       </div>
 
-      <TRow
-        label="Notify on LACKING status"
-        desc="Show an alert when a document is marked as LACKING."
-        value={onLacking}
-        onChange={setOnLacking}
-      />
+      <TRow label="Notify on LACKING status" desc="Show an alert when a document is marked as LACKING."
+        value={onLacking} onChange={setOnLacking} />
 
-      <TRow
-        label="Notify on APPROVED status"
-        desc="Show an alert when a document reaches APPROVED."
-        value={onApproved}
-        onChange={setOnApproved}
-      />
+      <TRow label="Notify on APPROVED status" desc="Show an alert when a document reaches APPROVED."
+        value={onApproved} onChange={setOnApproved} />
 
-      <TRow
-        label="Notify when document is stagnant"
-        desc=""
-        value={stagnantDays > 0}
-        onChange={(v) => setStagnantDays(v ? 15 : 0)}
-      >
+      <TRow label="Notify when document is stagnant" desc=""
+        value={stagnantDays > 0} onChange={(v) => setStagnantDays(v ? 15 : 0)}>
         {stagnantDays > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>After</span>
-            <input
-              type="number" min="1" max="90"
-              value={stagnantDays}
+            <input type="number" min="1" max="90" value={stagnantDays}
               onChange={(e) => setStagnantDays(e.target.value)}
-              style={{ ...S.input, width: "60px", textAlign: "center" }}
-            />
+              style={{ ...S.input, width: "60px", textAlign: "center" }} />
             <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>days without a status change.</span>
           </div>
         )}
@@ -872,27 +955,22 @@ function NotificationsSection({ prefs, onSave }) {
 // MAIN Settings page
 // ═══════════════════════════════════════════════════════════════════════════════
 export function Settings() {
-  const { userProfile }                               = useAuth();
+  const { userProfile }                           = useAuth();
   const { team, members, isAdmin, updateTeamSettings,
-          grantAdmin, revokeAdmin, removeMember }     = useTeam();
-  const { currentUser }                               = useAuth();
+          grantAdmin, revokeAdmin, removeMember } = useTeam();
+  const { currentUser }                           = useAuth();
 
-  // Documents (papers) needed for delete-status auto-move and subject-type guard
   const [papers, setPapers] = useState([]);
 
   useEffect(() => {
     if (!userProfile?.teamId) return;
-    const q = query(
-      collection(db, "papers"),
-      where("teamId", "==", userProfile.teamId)
-    );
+    const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
     const unsub = onSnapshot(q, (snap) =>
       setPapers(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !!d.projectId))
     );
     return unsub;
   }, [userProfile?.teamId]);
 
-  // ── Guard: admin only ──────────────────────────────────────────────────────
   if (!isAdmin()) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-disabled)", fontFamily: "Tahoma,Geneva,sans-serif" }}>
@@ -903,16 +981,17 @@ export function Settings() {
     );
   }
 
-  // ── Helpers to save individual sections ───────────────────────────────────
-  const saveStatuses    = (list)  => updateTeamSettings({ documentStatuses:     list });
-  const saveSubjects    = (list)  => updateTeamSettings({ documentSubjectTypes: list });
-  const saveThresholds  = (list)  => updateTeamSettings({ dashboardThresholds:  list });
-  const saveNotifPrefs  = (prefs) => updateTeamSettings({ notificationPrefs:    prefs });
+  const saveStatuses       = (list)  => updateTeamSettings({ documentStatuses:      list });
+  const saveSubjects       = (list)  => updateTeamSettings({ documentSubjectTypes:  list });
+  const saveStageConfig    = (cfg)   => updateTeamSettings({ subjectTypeStageConfig: cfg });
+  const saveThresholds     = (list)  => updateTeamSettings({ dashboardThresholds:   list });
+  const saveNotifPrefs     = (prefs) => updateTeamSettings({ notificationPrefs:     prefs });
 
-  const statuses    = team?.documentStatuses     || DEFAULT_STATUSES;
-  const subjectTypes= team?.documentSubjectTypes || DEFAULT_SUBJECT_TYPES;
-  const thresholds  = team?.dashboardThresholds  || DEFAULT_THRESHOLDS;
-  const notifPrefs  = team?.notificationPrefs    || {};
+  const statuses     = team?.documentStatuses      || DEFAULT_STATUSES;
+  const subjectTypes = team?.documentSubjectTypes  || DEFAULT_SUBJECT_TYPES;
+  const stageConfig  = team?.subjectTypeStageConfig || {};
+  const thresholds   = team?.dashboardThresholds   || DEFAULT_THRESHOLDS;
+  const notifPrefs   = team?.notificationPrefs     || {};
 
   return (
     <div style={S.page}>
@@ -921,43 +1000,30 @@ export function Settings() {
         <div style={S.sub}>Admin-only. Changes apply immediately across the entire team.</div>
       </div>
 
-      {/* NEW: Theme Control Section */}
       <ThemeControlSection teamId={userProfile?.teamId} />
 
-      <TeamProfileSection
-        team={team}
-        updateTeamSettings={updateTeamSettings}
-      />
+      <TeamProfileSection team={team} updateTeamSettings={updateTeamSettings} />
 
       <MemberManagementSection
-        members={members}
-        currentUser={currentUser}
-        grantAdmin={grantAdmin}
-        revokeAdmin={revokeAdmin}
-        removeMember={removeMember}
+        members={members} currentUser={currentUser}
+        grantAdmin={grantAdmin} revokeAdmin={revokeAdmin} removeMember={removeMember}
       />
 
-      <StatusListSection
-        statuses={statuses}
-        onSave={saveStatuses}
-        papers={papers}
-      />
+      <StatusListSection statuses={statuses} onSave={saveStatuses} papers={papers} />
 
-      <SubjectTypesSection
+      <SubjectTypesSection subjectTypes={subjectTypes} onSave={saveSubjects} papers={papers} />
+
+      {/* NEW ↓ */}
+      <SubjectStageConfigSection
         subjectTypes={subjectTypes}
-        onSave={saveSubjects}
-        papers={papers}
+        statuses={statuses}
+        config={stageConfig}
+        onSave={saveStageConfig}
       />
 
-      <ThresholdsSection
-        thresholds={thresholds}
-        onSave={saveThresholds}
-      />
+      <ThresholdsSection thresholds={thresholds} onSave={saveThresholds} />
 
-      <NotificationsSection
-        prefs={notifPrefs}
-        onSave={saveNotifPrefs}
-      />
+      <NotificationsSection prefs={notifPrefs} onSave={saveNotifPrefs} />
     </div>
   );
 }

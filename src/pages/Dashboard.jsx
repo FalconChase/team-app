@@ -758,7 +758,7 @@ export default function Dashboard() {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
     return onSnapshot(q, (snap) =>
-      setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !!d.projectId))
+      setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !!d.projectId && !d.hidden))
     );
   }, [userProfile?.teamId]);
 

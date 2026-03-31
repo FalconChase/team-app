@@ -89,12 +89,9 @@ function composeLabel(type, num, rpdmRef) {
 }
 
 // ─── Stage visibility helper ──────────────────────────────────────────────────
-// Returns the filtered status list for a given subject type.
-// If no config exists for the type, all statuses are returned unchanged.
 function getVisibleStatuses(subjectType, allStatuses, config) {
   const typeConfig = config?.[subjectType];
   if (!typeConfig?.visibleStatuses?.length) return allStatuses;
-  // Preserve master list order, only include configured visible ones
   return allStatuses.filter((s) => typeConfig.visibleStatuses.includes(s));
 }
 
@@ -232,23 +229,14 @@ function DetailsPanel({
 
   const isEarlyStatus  = status === "PRECOMPILING" || status === "FOR DoTS";
   const assignedMember = members?.find((m) => (m.uid || m.id) === d.assignedTo);
-
-  // ── Filter statuses by subject type config ────────────────────────────────
   const visibleStatuses = getVisibleStatuses(d.subjectType, statuses, stageConfig);
-
-  const isClosureType = CLOSURE_TYPES.has(d.subjectType);
+  const isClosureType   = CLOSURE_TYPES.has(d.subjectType);
 
   return (
     <div style={{ maxWidth: "600px" }}>
 
-      {/* Closure document notice */}
       {isClosureType && (
-        <div style={{
-          marginBottom: "14px", background: "var(--info-bg, #e8f4fd)",
-          border: "1px solid var(--info, #1565c0)", borderRadius: "6px",
-          padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)",
-          fontWeight: "600",
-        }}>
+        <div style={{ marginBottom: "14px", background: "var(--info-bg, #e8f4fd)", border: "1px solid var(--info, #1565c0)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)", fontWeight: "600" }}>
           📋 Closure Document — {d.subjectType}
         </div>
       )}
@@ -278,7 +266,6 @@ function DetailsPanel({
       {adminMode && (
         <>
           <div style={S.sectionLabel}>Change Status</div>
-          {/* ── Uses filtered visibleStatuses ── */}
           <select style={{ ...S.select, marginBottom: "4px" }} value={status} onChange={(e) => onStatusChange(e.target.value)}>
             {visibleStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
@@ -410,10 +397,8 @@ function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subj
 
   async function handleSave() { setSaving(true); await onSave(); setSaving(false); }
 
-  // ── Filter statuses for the currently selected subject type ───────────────
   const visibleStatuses = getVisibleStatuses(form.subjectType, statuses, stageConfig);
-
-  const isClosureType = CLOSURE_TYPES.has(form.subjectType);
+  const isClosureType   = CLOSURE_TYPES.has(form.subjectType);
 
   return (
     <div style={S.modal} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -429,28 +414,15 @@ function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subj
         <label style={S.label}>Subject Type *</label>
         <select style={{ ...S.input, marginBottom: "12px" }} value={form.subjectType}
           onChange={(e) => {
-            const newType = e.target.value;
+            const newType    = e.target.value;
             const newVisible = getVisibleStatuses(newType, statuses, stageConfig);
-            setForm((f) => ({
-              ...f,
-              subjectType: newType,
-              subjectNum: 1,
-              rpdmRef: "",
-              // Reset status to first visible stage for the new type
-              status: newVisible[0] || statuses[0],
-            }));
+            setForm((f) => ({ ...f, subjectType: newType, subjectNum: 1, rpdmRef: "", status: newVisible[0] || statuses[0] }));
           }}>
           {subjectTypes.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
 
-        {/* Closure document notice */}
         {isClosureType && (
-          <div style={{
-            marginBottom: "12px", background: "var(--info-bg, #e8f4fd)",
-            border: "1px solid var(--info, #1565c0)", borderRadius: "6px",
-            padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)",
-            fontWeight: "600",
-          }}>
+          <div style={{ marginBottom: "12px", background: "var(--info-bg, #e8f4fd)", border: "1px solid var(--info, #1565c0)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)", fontWeight: "600" }}>
             📋 Closure Document — applicable stages have been pre-filtered.
           </div>
         )}
@@ -476,7 +448,6 @@ function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subj
         )}
 
         <label style={S.label}>Initial Status</label>
-        {/* ── Uses filtered visibleStatuses ── */}
         <select style={{ ...S.input, marginBottom: "12px" }} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
           {visibleStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
@@ -544,7 +515,8 @@ export default function Documents() {
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
-    return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    // SURGICAL: exclude archived (hidden) documents
+    return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !d.hidden)));
   }, [userProfile?.teamId]);
 
   useEffect(() => {
@@ -569,11 +541,9 @@ export default function Documents() {
     pendingScrollId.current = null;
   }, [documents]);
 
-  // ── Read stage config from team ───────────────────────────────────────────
   const stageConfig = team?.subjectTypeStageConfig || {};
-
-  const getStage  = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
-  const toggleRow = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  const getStage    = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
+  const toggleRow   = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   function modifierFields() {
     return {
@@ -663,8 +633,9 @@ export default function Documents() {
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
+  // SURGICAL: exclude hidden (archived) docs — double safety net on top of snapshot filter
   const filtered = documents.filter(
-    (d) => d.projectId &&
+    (d) => d.projectId && !d.hidden &&
       (filterStatus === "All" || d.status === filterStatus) &&
       (filterProj   === "All" || d.projectId === filterProj)
   );

@@ -45,16 +45,18 @@ teamapp/
 ## Rules for Claude
 
 ### 1. At the start of every session
-- Read this file first
-- Wait for me to describe the change I want first
-- Then ask me for the relevant current code before writing anything
-- Fetch files using raw GitHub URLs in this format:
-  `https://raw.githubusercontent.com/FalconChase/team-app/main/[filepath]`
-- **After fetching any raw file, always verify it is the latest version** by asking me to run:
-  ```powershell
-  git log --oneline -1
-  ```
-  Then compare the commit hash and message against what GitHub shows. If anything looks off, wait 2-3 minutes and re-fetch before proceeding.
+
+> 🚨 **CRITICAL — READ THIS FIRST:**
+> **DO NOT fetch this instructions file or any active project file via raw GitHub URL at the start of a session.**
+> Raw GitHub URLs are served through a CDN that can be 1–5+ minutes stale — and in practice, across sessions that are hours or days apart, the lag can reflect multiple versions behind.
+> **The instructions file must always be pasted directly by the user. This is non-negotiable.**
+> If a user pastes a raw URL instead of the file contents, respond with:
+> > ⚠️ I can't use a raw URL to load the instructions — the CDN may be stale. Please open `CLAUDE_INSTRUCTIONS.md` in VSCode and paste the full contents directly here.
+
+- Read this file first — only from a direct paste, never from a fetch
+- Wait for the user to describe the change they want first
+- Then ask for the relevant current code before writing anything
+- **Raw GitHub URLs may only be used for truly stable, rarely-changing config files** (e.g. `firebase.json`, `firestore.rules`, `vite.config.js`) — never for any file touched in recent sessions
 
 ### 2. During the session
 - I work in iterations — each conversation is usually one update, feature, or fix
@@ -106,7 +108,7 @@ And paste the output here so I can confirm the commit hash matches what GitHub r
 - Warn at natural pause points only — **never interrupt mid-fix or mid-explanation**
 - If a fix is in progress, finish it cleanly first, then warn immediately after
 - Use this warning:
-  > ⚠️ **This thread is getting long.** Consider starting a new session and pasting the instructions URL to keep things sharp.
+  > ⚠️ **This thread is getting long.** Consider starting a new session and pasting the instructions file contents to keep things sharp.
 - If the thread is extremely long and a new task is about to start, warn proactively before even beginning it
 
 ### 8. Session handoff prompt
@@ -115,27 +117,45 @@ And paste the output here so I can confirm the commit hash matches what GitHub r
   - What was completed and confirmed working
   - What is still pending or in progress
   - Any important decisions, constraints, or context I'd need to carry over
-- Format it so I can paste it directly into a new thread after the instructions URL
+- Format it so I can paste it directly into a new thread along with the pasted instructions file
 
 ### 9. ⚡ CDN LAG AWARENESS — NON-NEGOTIABLE POWER RULE
-- GitHub's raw CDN can serve stale/cached file content for 1-5 minutes after a push
+- GitHub's raw CDN can serve stale/cached file content for 1–5+ minutes after a push — and across sessions hours or days apart, it can reflect multiple commits behind
 - **Never treat a raw URL fetch alone as proof that code is current — ever**
 - This rule cannot be skipped, assumed, or shortcut for any reason
 - The only CDN-proof verification methods are:
-  1. **Commit hash check** — ask me to run `git log --oneline -1` and compare the hash to GitHub's commit history
-  2. **GitHub file view** — the non-raw GitHub file view (github.com/FalconChase/team-app/blob/main/...) updates immediately after a push, unlike raw URLs
-- If I fetch a raw file and something looks outdated or inconsistent with what I'd expect, flag it immediately — do not proceed with potentially stale code
-- If the raw content doesn't match what was reportedly just pushed, say so clearly and ask me to wait 2-3 minutes before re-fetching
+  1. **Direct paste from VSCode** — always the preferred and safest method for any active file
+  2. **Commit hash check** — ask me to run `git log --oneline -1` and compare the hash to GitHub's commit history
+  3. **GitHub file view** — the non-raw GitHub file view (github.com/FalconChase/team-app/blob/main/...) updates immediately after a push, unlike raw URLs
+- If a raw URL fetch is used and something looks outdated or inconsistent, flag it immediately — do not proceed
 - **This rule protects every other rule — stale code breaks everything downstream**
 
-### 10. File fetching vs. pasting guideline
-- **Fetch via raw GitHub URL only for stable/config files** not touched in recent commits
-- **For any file modified in recent sessions, paste directly from VSCode** — do not rely on fetch
-- If fetched code looks shorter than expected or appears to be missing features, **stop and ask the user to paste** — do not proceed on stale code
-- Apply changes **manually (surgical edit) if under ~20 lines**; only request a full rewrite if changes are too scattered to locate manually
+### 10. 🚫 RAW URL BAN FOR ACTIVE FILES — ZERO EXCEPTIONS
+
+> **This is the most important operational rule in this file.**
+> It exists because raw GitHub URL fetching has repeatedly caused Claude to operate on outdated code — silently, without any warning — across multiple sessions.
+
+**The rule is simple:**
+
+| File type | Method |
+|---|---|
+| `CLAUDE_INSTRUCTIONS.md` | ✅ Always paste from VSCode |
+| Any `.jsx`, `.js`, `.css` file touched recently | ✅ Always paste from VSCode |
+| Stable config files (`firebase.json`, `vite.config.js`, `firestore.rules`, etc.) | ⚠️ Raw URL fetch allowed — but still verify with commit hash |
+| Any file modified in the last 5 commits | ✅ Always paste from VSCode — no exceptions |
+
+**If a raw URL is provided for an active file:**
+- Do not silently proceed
+- Immediately respond with:
+  > ⚠️ **Raw URL detected for an active file.** I can't guarantee this is the latest version due to CDN lag. Please paste the file contents directly from VSCode before I proceed.
+
+**If fetched content looks shorter, simpler, or missing features compared to what's expected:**
+- Stop immediately
+- Do not guess or fill in the gaps
+- Say clearly:
+  > ⚠️ **This fetched file looks incomplete or outdated.** Please paste the current version directly from VSCode.
 
 ## How to Start a New Thread
-1. Paste this URL to Claude:
-   `https://raw.githubusercontent.com/FalconChase/team-app/main/CLAUDE_INSTRUCTIONS.md`
-2. Say: "Read my instructions first"
-3. Describe what you want to work on today
+1. Open `CLAUDE_INSTRUCTIONS.md` in VSCode and **paste the full file contents directly** into the chat — do not send the raw URL
+2. Describe what you want to work on today
+3. Paste any other relevant files directly from VSCode — do not rely on raw URL fetches for active project files

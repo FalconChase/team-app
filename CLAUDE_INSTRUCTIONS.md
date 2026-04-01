@@ -55,8 +55,8 @@ teamapp/
 > - [ ] Rule 8 — Generate handoff prompt when user signals new thread
 > - [ ] Rule 9 — CDN lag awareness; never trust raw URL alone
 > - [ ] Rule 10 — Raw URL ban for active files; always demand paste
-> - [ ] Rule 11 — Code-Map large files (100+ lines); Token-Sipper fetching after first map
-> - [ ] Rule 12 — Manual fix vs. rewrite criteria; always ask before rewriting
+> - [ ] Rule 11 — Ask mapped status only when a file is about to be worked on; Token-Sipper if mapped; Grand Map if not; rewrite resets the cycle
+> - [ ] Rule 12 — Manual fix vs. rewrite criteria; always ask before rewriting; rewrite resets the map cycle
 
 ---
 
@@ -133,6 +133,7 @@ And paste the output here so I can confirm the commit hash matches what GitHub r
   - What was completed and confirmed working
   - What is still pending or in progress
   - Any important decisions, constraints, or context I'd need to carry over
+  - Which files were touched, whether they are mapped or unmapped, and which sections were affected
 - Format it so I can paste it directly into a new thread along with the pasted instructions file
 
 ### 9. ⚡ CDN LAG AWARENESS — NON-NEGOTIABLE POWER RULE
@@ -171,65 +172,160 @@ And paste the output here so I can confirm the commit hash matches what GitHub r
 - Say clearly:
   > ⚠️ **This fetched file looks incomplete or outdated.** Please paste the current version directly from VSCode.
 
-### 11. 🗺️ CODE-MAPPING SYSTEM — TOKEN-EFFICIENT LARGE FILE PROTOCOL
+### 11. 🗺️ CODE-MAPPING SYSTEM — BOOK-STYLE PROTOCOL
 
-> **Purpose:** Avoid pasting 1,000+ line files repeatedly across sessions. Once a large file is mapped, only the relevant sections are ever pasted — saving 90%+ of tokens on future sessions.
+> **Purpose:** Avoid pasting large files (100+ lines) repeatedly across sessions. The full file is only ever pasted once per map cycle — during the Grand Mapping. After that, only the `[CODE-MAP INDEX]` comment block and the specific sections needed are ever exchanged, saving 90%+ of tokens on every future session.
+>
+> The ToC is never a separate file. It lives inside the source code itself as a comment block at the very top — above all imports and declarations. The code file IS the map.
+
+---
 
 #### When it applies
-- Any file **100+ lines** gets a Code Map on its first appearance in a session
+- Any file **100+ lines** is eligible for Code Mapping
 - Files under 100 lines — proceed normally, no mapping needed
 
-#### A. Grand Mapping (first time a large file is introduced)
-When a 100+ line file is pasted for the first time, Claude must:
-1. **Read the full file first — do not suggest fixes yet**
-2. **Generate a Master Table of Contents (ToC)** using `[SEC-XX]` anchor tags
-3. Every map must always include these two anchors:
+---
+
+#### A. When to Ask About Mapping Status
+
+Claude does **not** ask about mapping at the start of a session.
+Claude asks **at the exact moment a fix, proposal, or change is about to involve a specific file.**
+
+The trigger is: *"This fix will touch `[filename]`."*
+At that point — and only at that point — Claude asks:
+
+> "Is `[filename]` mapped yet?"
+
+- **If yes** → ask the user to paste the `[CODE-MAP INDEX]` comment block from the top of the file, then proceed to Token-Sipper (Section C)
+- **If no** → proceed to Grand Mapping (Section B)
+- **If unsure** → user checks the top of the file in VSCode for a `[CODE-MAP INDEX]` comment block
+
+**Claude never assumes. Claude never auto-maps. Claude never asks about mapping before it is relevant.**
+
+---
+
+#### B. Grand Mapping (file is not yet mapped)
+
+When the user confirms the file is not mapped:
+
+1. **Ask the user to paste the full file** — this is the one and only full paste for this map cycle
+2. **Read the full file first — do not suggest fixes yet**
+3. **Generate the `[CODE-MAP INDEX]` comment block** as the Master Table of Contents
+4. **Insert `[SEC-XX]` and `[END-SEC-XX]` anchor tags** throughout the code body to define section boundaries
+5. Every map must always include these two anchors at minimum:
    - `[SEC-00]: Global Imports & Dependencies`
-   - `[SEC-01]: Global State & Variables (useState/useEffect hooks)`
-4. Deliver the ToC as a **downloadable `.md` file** so the user can save it and reuse it across sessions
+   - `[SEC-01]: Global State, Refs & Hooks`
+6. **Deliver the full mapped file as a downloadable file** (per Rule 3) with:
+   - The `[CODE-MAP INDEX]` comment block at the very top — above all imports, above all declarations
+   - All `[SEC-XX]` / `[END-SEC-XX]` tags embedded throughout the code body
+7. **After the user saves the mapped file**, proceed with the fix using Token-Sipper (Section C) — do not ask for the full file again
 
-**Example ToC format:**
+**The ToC is not a separate `.md` file. It is a comment block embedded at the top of the source file itself.**
+
+**Example of how the top of a mapped file looks:**
+
+```jsx
+/* ============================================================
+   [CODE-MAP INDEX] — ComponentName.jsx
+   ============================================================
+   [SEC-00]: Imports & Dependencies
+   [SEC-01]: State, Refs & Hooks
+   [SEC-02]: Logic — Firestore Fetch
+   [SEC-03]: Logic — Filter & Search
+   [SEC-04]: Handler — Delete
+   [SEC-05]: Render — Main JSX
+   ============================================================ */
+
+import React, { useState, useEffect } from 'react';
+// ... rest of imports
+
+// [SEC-00]: Imports & Dependencies
+// [END-SEC-00]
+
+// [SEC-01]: State, Refs & Hooks
+const [data, setData] = useState([]);
+// [END-SEC-01]
 ```
-[SEC-00]: Global Imports & Dependencies — lines ~1–25
-[SEC-01]: Global State & Variables — lines ~26–60
-[SEC-02]: Firestore Fetch Logic — lines ~61–110
-[SEC-03]: Filter & Search Logic — lines ~111–150
-[SEC-04]: Delete Handler — lines ~151–180
-[SEC-05]: Render — JSX Return — lines ~181–350
+
+---
+
+#### C. Token-Sipper Navigation (file is already mapped)
+
+Once a file is mapped and saved in VSCode, the user **never pastes the full file again** — unless a Rule 12 rewrite resets the cycle.
+
+1. **User pastes only the `[CODE-MAP INDEX]` comment block** from the top of the file — not the full code
+2. **Claude reads the ToC** and identifies which `[SEC-XX]` sections are relevant to the fix
+3. **Claude requests only those specific sections:**
+   > "Based on the map, I need `[SEC-01]` and `[SEC-04]` for this fix. Please paste only those blocks."
+4. **User pastes only those blocks** — not the full file
+5. **Claude delivers only the rewritten block(s)** with `[SEC-XX]` / `[END-SEC-XX]` tags intact so the user knows exactly where to paste them back in VSCode
+
+**Token-Sipper is the Code-Map equivalent of a surgical edit (Rule 6). It does not bypass Rule 12 — if rewrite criteria are met during a Token-Sipper session, Claude must stop and escalate.**
+
+---
+
+#### D. Full Rewrite Resets the Map Cycle
+
+A full rewrite per Rule 12 is inevitable when the criteria are met — the map does not prevent it.
+
+When a rewrite is approved and delivered:
+
+1. The old `[CODE-MAP INDEX]` is discarded — it no longer reflects the file structure
+2. The rewritten file is delivered as a downloadable (per Rule 3) without the old map tags
+3. Claude immediately flags:
+   > "This rewrite invalidates the old map. Once you've saved and confirmed the file works, paste it back here and I'll perform a fresh Grand Mapping."
+4. A fresh Grand Mapping is done on the new version — then Token-Sipper resumes from there
+
+**The map cycle per file:**
+```
+Full paste → Grand Mapping
+    → Token-Sipper sessions (sections only)
+        → Rule 12 rewrite triggered
+            → Full paste → Fresh Grand Mapping
+                → Token-Sipper sessions resume
 ```
 
-#### B. Token-Sipper Fetching (all sessions after the first map)
-Once a file is mapped, the user never pastes the full file again:
-1. **User pastes only the ToC** at the start of the session
-2. **Claude identifies** which `[SEC-XX]` sections are relevant to the task
-3. **Claude requests only those sections:**
-   > "Please paste the code inside `[SEC-00]`, `[SEC-01]`, and `[SEC-04]` only."
-4. User pastes only those blocks — not the full file
+---
 
-#### C. SEC-XX tags must survive delivery
-- When delivering a rewritten section or full file, **always keep the `[SEC-XX]` anchor tags** inside the code as comments
-- This keeps the map active for the next session without needing a re-map
-- Example:
-  ```jsx
-  // [SEC-04]: Delete Handler
-  const handleDelete = async (id) => {
-    ...
-  };
-  // [END-SEC-04]
-  ```
+#### E. SEC-XX Tags Must Survive Every Delivery
 
-#### D. Surgical delivery with Code-Map
-- Never say "go to line 452" — always say "find `[SEC-04]`"
-- Deliver only the replacement block with its anchor tags intact
-- If a fix in one section requires changes in another, flag it first:
+- When delivering a rewritten section, **always keep the `[SEC-XX]` and `[END-SEC-XX]` anchor tags** inside the code as comments so the user knows exactly where to paste the block back
+- This keeps the map active and intact for the next session without needing a re-map
+- Example of a delivered replacement block:
+
+```jsx
+// [SEC-04]: Handler — Delete
+const handleDelete = async (id) => {
+  await deleteDoc(doc(db, 'collection', id));
+  setData(prev => prev.filter(item => item.id !== id));
+};
+// [END-SEC-04]
+```
+
+---
+
+#### F. Global Variable & Cross-Section Awareness
+
+- When a fix in one section requires changes in another, flag it clearly before delivering:
 
   > ⚠️ **GLOBAL SYNC REQUIRED**
   > - Update `[SEC-00]`: Add `import { X } from '...'`
   > - Update `[SEC-01]`: Add `const [x, setX] = useState(null)`
-  > - Fix `[SEC-04]`: [snippet below]
+  > - Fix `[SEC-04]`: [rewritten block below]
 
-#### E. Re-mapping
-- If a file has been heavily rewritten since the last map, the old ToC is stale — discard it and do a fresh Grand Mapping on the new version
+- **Never say "go to line 452"** — always reference `[SEC-XX]` tags. Line numbers shift; anchor tags don't.
+
+---
+
+#### G. Handoff — Mapped File State (Rule 8 integration)
+
+When generating a session handoff prompt (Rule 8), Claude must include for each file touched:
+- The filename
+- Whether it is mapped or unmapped
+- Which sections were touched in the session
+- Whether the map is still valid or needs a fresh Grand Mapping after a rewrite
+
+---
 
 ### 12. ✂️ MANUAL FIX vs. REWRITE DECISION PROTOCOL
 
@@ -267,12 +363,14 @@ When rewrite criteria are met, Claude must stop and say:
 
 **Claude never proceeds with a rewrite until the user explicitly says yes.**
 
+**When a rewrite is approved — Rule 11-D applies: the map cycle resets.**
+
 ---
 
 ## How to Start a New Thread
 1. Open `CLAUDE_INSTRUCTIONS.md` in VSCode and **paste the full file contents directly** into the chat — do not send the raw URL
 2. Describe what you want to work on today
-3. For any large file (100+ lines) being worked on:
-   - **First session:** paste the full file — Claude will generate the Code Map
-   - **Subsequent sessions:** paste the saved ToC only, then paste only the sections Claude asks for
+3. Claude will ask about mapping status only when a specific file is about to be worked on:
+   - **If already mapped:** paste only the `[CODE-MAP INDEX]` comment block — Claude will request only the sections it needs
+   - **If not yet mapped:** Claude will ask for the full file, perform the Grand Mapping, deliver it back with the ToC embedded at the top, then proceed with the fix
 4. Do not rely on raw URL fetches for any active project files

@@ -574,12 +574,28 @@ export default function Documents() {
   }
 
   async function handleStatusChange(docId, newStatus) {
-    await updateDoc(doc(db, "papers", docId), {
-      status: newStatus,
-      ...modifierFields(),
-      activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
-    });
-  }
+  // ARCHIVE RULE: when status → ARCHIVED, always write hidden/archivedAt/archivedBy.
+  // These three fields are what makes the doc disappear from Documents + appear in Archive.
+  // Never remove them from this block or archive will silently break.
+  const archiveFields = newStatus === "ARCHIVED"
+    ? {
+        hidden:     true,
+        archivedAt: serverTimestamp(),
+        archivedBy: userProfile.displayName || userProfile.email || "Unknown",
+      }
+    : {};
+
+  await updateDoc(doc(db, "papers", docId), {
+    status: newStatus,
+    ...archiveFields,
+    ...modifierFields(),
+    activityLog: arrayUnion({
+      text: `Status updated to "${newStatus}"`,
+      by:   userProfile.displayName,
+      at:   new Date().toISOString(),
+    }),
+  });
+}
 
   async function handleSaveDetails(docId, statusLabel, details) {
     const key = toKey(statusLabel);

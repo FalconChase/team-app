@@ -257,8 +257,8 @@ function ThemeControlSection({ teamId }) {
         ))}
       </div>
 
-      {saved   && <div style={{ fontSize: "11px", color: "var(--success)", background: "var(--success-bg)", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>✓ Theme applied successfully</div>}
-      {saving  && <div style={{ fontSize: "11px", color: "var(--text-secondary)", textAlign: "center", fontStyle: "italic" }}>Applying theme...</div>}
+      {saved  && <div style={{ fontSize: "11px", color: "var(--success)", background: "var(--success-bg)", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>✓ Theme applied successfully</div>}
+      {saving && <div style={{ fontSize: "11px", color: "var(--text-secondary)", textAlign: "center", fontStyle: "italic" }}>Applying theme...</div>}
     </div>
   );
 }
@@ -623,20 +623,16 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 4B — Subject Stage Visibility Config  ← NEW
+// SECTION 4B — Subject Stage Visibility Config
 // ═══════════════════════════════════════════════════════════════════════════════
 function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
-  // config shape: { [subjectType]: { visibleStatuses: string[] } }
-  // We keep a local draft of the whole config and save once.
-  const [draft,       setDraft]       = useState(config || {});
-  const [expanded,    setExpanded]    = useState(null); // which subject type is open
-  const [saving,      setSaving]      = useState(false);
-  const [saved,       setSaved]       = useState(false);
+  const [draft,    setDraft]    = useState(config || {});
+  const [expanded, setExpanded] = useState(null);
+  const [saving,   setSaving]   = useState(false);
+  const [saved,    setSaved]    = useState(false);
 
-  // Keep draft in sync if team data reloads
   useEffect(() => { setDraft(config || {}); }, [JSON.stringify(config)]);
 
-  // For a given type, return its visible set (or all if unconfigured)
   function getVisible(type) {
     return draft[type]?.visibleStatuses ?? [...statuses];
   }
@@ -646,31 +642,16 @@ function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
     const next    = current.includes(status)
       ? current.filter((s) => s !== status)
       : [...current, status];
-
-    // Preserve master list order
     const ordered = statuses.filter((s) => next.includes(s));
-
-    // If all stages are visible, remove the config entry entirely (clean default)
     if (ordered.length === statuses.length) {
-      setDraft((prev) => {
-        const updated = { ...prev };
-        delete updated[type];
-        return updated;
-      });
+      setDraft((prev) => { const u = { ...prev }; delete u[type]; return u; });
     } else {
-      setDraft((prev) => ({
-        ...prev,
-        [type]: { visibleStatuses: ordered },
-      }));
+      setDraft((prev) => ({ ...prev, [type]: { visibleStatuses: ordered } }));
     }
   }
 
   function resetType(type) {
-    setDraft((prev) => {
-      const updated = { ...prev };
-      delete updated[type];
-      return updated;
-    });
+    setDraft((prev) => { const u = { ...prev }; delete u[type]; return u; });
   }
 
   async function handleSave() {
@@ -699,36 +680,22 @@ function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
 
         return (
           <div key={type} style={{
-            border: "0.5px solid var(--border-main)",
-            borderRadius: "8px", marginBottom: "8px",
-            overflow: "hidden",
-            background: isOpen ? "var(--bg-secondary)" : "var(--bg-hover)",
+            border: "0.5px solid var(--border-main)", borderRadius: "8px", marginBottom: "8px",
+            overflow: "hidden", background: isOpen ? "var(--bg-secondary)" : "var(--bg-hover)",
           }}>
-            {/* ── Row header ── */}
             <div
               onClick={() => setExpanded(isOpen ? null : type)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "10px 14px", cursor: "pointer",
-              }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", cursor: "pointer" }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)" }}>{type}</span>
                 {isCustom && hiddenCnt > 0 && (
-                  <span style={{
-                    fontSize: "10px", padding: "1px 7px", borderRadius: "8px",
-                    background: "var(--warning-bg)", color: "var(--warning)",
-                    fontWeight: "600", border: "1px solid var(--warning)",
-                  }}>
+                  <span style={{ fontSize: "10px", padding: "1px 7px", borderRadius: "8px", background: "var(--warning-bg)", color: "var(--warning)", fontWeight: "600", border: "1px solid var(--warning)" }}>
                     {hiddenCnt} hidden
                   </span>
                 )}
                 {!isCustom && (
-                  <span style={{
-                    fontSize: "10px", padding: "1px 7px", borderRadius: "8px",
-                    background: "var(--bg-secondary)", color: "var(--text-disabled)",
-                    fontWeight: "500", border: "0.5px solid var(--border-light)",
-                  }}>
+                  <span style={{ fontSize: "10px", padding: "1px 7px", borderRadius: "8px", background: "var(--bg-secondary)", color: "var(--text-disabled)", fontWeight: "500", border: "0.5px solid var(--border-light)" }}>
                     all stages
                   </span>
                 )}
@@ -738,29 +705,16 @@ function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
                   <button
                     style={{ ...S.btn(false, false, true), fontSize: "10px", padding: "2px 8px" }}
                     onClick={(e) => { e.stopPropagation(); resetType(type); }}
-                    title="Reset to show all stages"
-                  >
-                    Reset
-                  </button>
+                  >Reset</button>
                 )}
-                <span style={{
-                  fontSize: "11px", color: "var(--text-secondary)",
-                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  display: "inline-block", transition: "transform 0.15s",
-                }}>▾</span>
+                <span style={{ fontSize: "11px", color: "var(--text-secondary)", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", display: "inline-block", transition: "transform 0.15s" }}>▾</span>
               </div>
             </div>
 
-            {/* ── Expanded toggle list ── */}
             {isOpen && (
-              <div style={{
-                borderTop: "0.5px solid var(--border-light)",
-                padding: "12px 14px",
-                display: "flex", flexDirection: "column", gap: "4px",
-              }}>
+              <div style={{ borderTop: "0.5px solid var(--border-light)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
                 <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px", fontStyle: "italic" }}>
                   Toggle off stages that don't apply to <strong>{type}</strong>.
-                  Hidden stages won't appear in the status dropdown for this subject type.
                 </div>
                 {statuses.map((status, idx) => {
                   const isVisible = visible.includes(status);
@@ -774,11 +728,7 @@ function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span style={S.stageNum}>{idx + 1}</span>
-                        <span style={{
-                          fontSize: "12px", fontWeight: "500",
-                          color: isVisible ? "var(--text-primary)" : "var(--text-disabled)",
-                          textDecoration: isVisible ? "none" : "line-through",
-                        }}>
+                        <span style={{ fontSize: "12px", fontWeight: "500", color: isVisible ? "var(--text-primary)" : "var(--text-disabled)", textDecoration: isVisible ? "none" : "line-through" }}>
                           {status}
                         </span>
                       </div>
@@ -803,7 +753,91 @@ function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 5 — Dashboard Color Thresholds
+// SECTION 5 — Archive Authorization Code
+// Stores archiveAuthCode in the team Firestore doc.
+// Default is "ARC123" if never set.
+// Required to restore any document from the Archive Library.
+// Simulates interdepartmental authorization from the Archive department.
+// ═══════════════════════════════════════════════════════════════════════════════
+function ArchiveAuthSection({ team, updateTeamSettings }) {
+  const [code,   setCode]   = useState(team?.archiveAuthCode || "ARC123");
+  const [show,   setShow]   = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+
+  useEffect(() => {
+    setCode(team?.archiveAuthCode || "ARC123");
+  }, [team?.archiveAuthCode]);
+
+  async function handleSave() {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed || trimmed.length < 4) {
+      alert("Authorization code must be at least 4 characters.");
+      return;
+    }
+    setSaving(true);
+    await updateTeamSettings({ archiveAuthCode: trimmed });
+    setCode(trimmed);
+    setSaving(false);
+    setSaved(true);
+    setShow(false);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  return (
+    <div style={S.section}>
+      <div style={S.sTitle}>🔐 Archive Authorization Code</div>
+      <div style={S.sDesc}>
+        This code is required to restore any document from the Archive Library.
+        It simulates authorization from the Archive department — share it only
+        with authorized personnel. Default is <strong>ARC123</strong> until changed.
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
+        <div style={{
+          fontFamily: "monospace", fontSize: "20px", fontWeight: "700",
+          letterSpacing: "4px", color: "var(--primary)", background: "var(--bg-secondary)",
+          padding: "8px 18px", borderRadius: "8px", border: "1px solid var(--border-main)",
+          minWidth: "120px", textAlign: "center",
+        }}>
+          {show ? (team?.archiveAuthCode || "ARC123") : "••••••"}
+        </div>
+        <button style={S.btn(false, false, true)} onClick={() => setShow(v => !v)}>
+          {show ? "Hide" : "Reveal"}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+        <div style={{ flex: 1 }}>
+          <label style={S.label}>New Authorization Code</label>
+          <input
+            style={{ ...S.input, fontFamily: "monospace", letterSpacing: "2px", textTransform: "uppercase" }}
+            value={code}
+            maxLength={20}
+            placeholder="e.g. ARC123"
+            onChange={(e) => { setCode(e.target.value.toUpperCase()); setSaved(false); }}
+          />
+        </div>
+        <button style={S.btn(true)} onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : "Update Code"}
+        </button>
+      </div>
+
+      {saved && (
+        <div style={{ fontSize: "11px", color: "var(--success)", background: "var(--success-bg)", padding: "8px 12px", borderRadius: "6px", marginTop: "10px" }}>
+          ✓ Authorization code updated successfully.
+        </div>
+      )}
+
+      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "12px", fontStyle: "italic" }}>
+        Minimum 4 characters. Letters and numbers only recommended. Case-insensitive when entered during restore.
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 6 — Dashboard Color Thresholds
 // ═══════════════════════════════════════════════════════════════════════════════
 function ThresholdsSection({ thresholds, onSave }) {
   const [rows,   setRows]   = useState(thresholds?.length ? [...thresholds] : [...DEFAULT_THRESHOLDS]);
@@ -879,7 +913,7 @@ function ThresholdsSection({ thresholds, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 6 — Notification Preferences
+// SECTION 7 — Notification Preferences
 // ═══════════════════════════════════════════════════════════════════════════════
 function NotificationsSection({ prefs, onSave }) {
   const [onLacking,    setOnLacking]    = useState(prefs?.onLacking    ?? true);
@@ -890,9 +924,9 @@ function NotificationsSection({ prefs, onSave }) {
 
   useEffect(() => {
     if (prefs) {
-      setOnLacking(prefs.onLacking    ?? true);
+      setOnLacking(prefs.onLacking       ?? true);
       setStagnantDays(prefs.stagnantDays ?? 15);
-      setOnApproved(prefs.onApproved  ?? false);
+      setOnApproved(prefs.onApproved     ?? false);
     }
   }, [JSON.stringify(prefs)]);
 
@@ -981,17 +1015,17 @@ export function Settings() {
     );
   }
 
-  const saveStatuses       = (list)  => updateTeamSettings({ documentStatuses:      list });
-  const saveSubjects       = (list)  => updateTeamSettings({ documentSubjectTypes:  list });
-  const saveStageConfig    = (cfg)   => updateTeamSettings({ subjectTypeStageConfig: cfg });
-  const saveThresholds     = (list)  => updateTeamSettings({ dashboardThresholds:   list });
-  const saveNotifPrefs     = (prefs) => updateTeamSettings({ notificationPrefs:     prefs });
+  const saveStatuses    = (list)  => updateTeamSettings({ documentStatuses:       list });
+  const saveSubjects    = (list)  => updateTeamSettings({ documentSubjectTypes:   list });
+  const saveStageConfig = (cfg)   => updateTeamSettings({ subjectTypeStageConfig: cfg  });
+  const saveThresholds  = (list)  => updateTeamSettings({ dashboardThresholds:    list });
+  const saveNotifPrefs  = (prefs) => updateTeamSettings({ notificationPrefs:      prefs });
 
-  const statuses     = team?.documentStatuses      || DEFAULT_STATUSES;
-  const subjectTypes = team?.documentSubjectTypes  || DEFAULT_SUBJECT_TYPES;
+  const statuses     = team?.documentStatuses       || DEFAULT_STATUSES;
+  const subjectTypes = team?.documentSubjectTypes   || DEFAULT_SUBJECT_TYPES;
   const stageConfig  = team?.subjectTypeStageConfig || {};
-  const thresholds   = team?.dashboardThresholds   || DEFAULT_THRESHOLDS;
-  const notifPrefs   = team?.notificationPrefs     || {};
+  const thresholds   = team?.dashboardThresholds    || DEFAULT_THRESHOLDS;
+  const notifPrefs   = team?.notificationPrefs      || {};
 
   return (
     <div style={S.page}>
@@ -1013,13 +1047,14 @@ export function Settings() {
 
       <SubjectTypesSection subjectTypes={subjectTypes} onSave={saveSubjects} papers={papers} />
 
-      {/* NEW ↓ */}
       <SubjectStageConfigSection
         subjectTypes={subjectTypes}
         statuses={statuses}
         config={stageConfig}
         onSave={saveStageConfig}
       />
+
+      <ArchiveAuthSection team={team} updateTeamSettings={updateTeamSettings} />
 
       <ThresholdsSection thresholds={thresholds} onSave={saveThresholds} />
 

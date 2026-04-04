@@ -201,13 +201,71 @@ function LackingItem({ item, isCustom, onToggle, onRemove }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ArchiveConfirmModal
+// Shown when the Archive button is clicked — requires explicit confirmation.
+// This is the ONLY way a document gets archived. It does NOT go through
+// handleStatusChange. It writes hidden+archivedAt+archivedBy directly.
+// ═══════════════════════════════════════════════════════════════════════════════
+function ArchiveConfirmModal({ documentName, onConfirm, onClose, saving }) {
+  const [confirmed, setConfirmed] = useState(false);
+
+  return (
+    <div style={{ ...S.modal, zIndex: 600 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ ...S.mBox, maxWidth: "420px", borderTop: "4px solid #8a6000" }}>
+        <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>
+          🗄️ Archive this document?
+        </div>
+        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "16px", background: "var(--bg-secondary)", borderRadius: "6px", padding: "10px 12px", fontWeight: "500" }}>
+          {documentName}
+        </div>
+
+        <div style={{ fontSize: "12px", color: "#8a6000", background: "#fff8e1", border: "1px solid #8a6000", borderRadius: "6px", padding: "10px 12px", marginBottom: "16px", lineHeight: "1.6" }}>
+          ⚠️ This document will be removed from the Documents list and Dashboard. It will be stored in the Archive Library under Records. This action is permanent and can only be reversed by an admin.
+        </div>
+
+        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", marginBottom: "20px" }}>
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+            style={{ marginTop: "2px", flexShrink: 0 }}
+          />
+          <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>
+            I understand this document will be archived permanently.
+          </span>
+        </label>
+
+        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+          <button style={S.btn(false)} onClick={onClose} disabled={saving}>Cancel</button>
+          <button
+            disabled={!confirmed || saving}
+            onClick={onConfirm}
+            style={{
+              padding: "8px 16px", borderRadius: "6px", cursor: confirmed && !saving ? "pointer" : "not-allowed",
+              fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "12px",
+              border: "none",
+              background: confirmed && !saving ? "#8a6000" : "var(--bg-secondary)",
+              color: confirmed && !saving ? "#fff" : "var(--text-disabled)",
+              fontWeight: "600",
+              transition: "all 0.15s",
+            }}
+          >
+            {saving ? "Archiving…" : "Archive Permanently"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DetailsPanel
 // ═══════════════════════════════════════════════════════════════════════════════
 function DetailsPanel({
   document: d, statuses, stageConfig, members, adminMode,
   onStatusChange, onSaveDetails, onToggleLacking,
   onRemoveLackingItem, onClearCompleted,
-  onAddCustomItem, onAssignMember, onDelete,
+  onAddCustomItem, onAssignMember, onDelete, onArchive,
 }) {
   const { status } = d;
   const key = toKey(status);
@@ -376,12 +434,31 @@ function DetailsPanel({
         </div>
       )}
 
-      {adminMode && (
-        <>
-          <div style={S.divider} />
+      {/* ── Archive + Delete row ─────────────────────────────────────────────
+          Archive is visible to ALL users.
+          Delete is visible to ADMINS only.
+          These are separate actions with separate confirms.
+          Archive writes hidden+archivedAt+archivedBy — NOT via handleStatusChange.
+      ────────────────────────────────────────────────────────────────────── */}
+      <div style={S.divider} />
+      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <button
+          style={{
+            padding: "5px 12px", borderRadius: "6px", cursor: "pointer",
+            fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "11px",
+            border: "1px solid #8a6000",
+            background: "transparent",
+            color: "#8a6000",
+          }}
+          onClick={onArchive}
+        >
+          🗄️ Archive Document
+        </button>
+        {adminMode && (
           <button style={S.smBtn(false, true)} onClick={onDelete}>Delete Document</button>
-        </>
-      )}
+        )}
+      </div>
+
     </div>
   );
 }
@@ -500,6 +577,10 @@ export default function Documents() {
   const [filterProj,   setFilterProj]   = useState("All");
   const [form,         setForm]         = useState(BLANK_FORM);
 
+  // ── Archive modal state ────────────────────────────────────────────────────
+  const [archiveTarget,  setArchiveTarget]  = useState(null); // { id, subject }
+  const [archiveSaving,  setArchiveSaving]  = useState(false);
+
   const pendingScrollId = useRef(null);
 
   useEffect(() => {
@@ -512,11 +593,14 @@ export default function Documents() {
     if (team?.documentSubjectTypes?.length) setSubjectTypes(team.documentSubjectTypes);
   }, [team]);
 
+  // ARCHIVE RULE: snapshot excludes hidden docs so archived docs never appear here.
+  // Dashboard.jsx has the same filter. Both must stay in sync.
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
-    // SURGICAL: exclude archived (hidden) documents
-    return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !d.hidden)));
+    return onSnapshot(q, (snap) =>
+      setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !d.hidden))
+    );
   }, [userProfile?.teamId]);
 
   useEffect(() => {
@@ -574,28 +658,42 @@ export default function Documents() {
   }
 
   async function handleStatusChange(docId, newStatus) {
-  // ARCHIVE RULE: when status → ARCHIVED, always write hidden/archivedAt/archivedBy.
-  // These three fields are what makes the doc disappear from Documents + appear in Archive.
-  // Never remove them from this block or archive will silently break.
-  const archiveFields = newStatus === "ARCHIVED"
-    ? {
-        hidden:     true,
-        archivedAt: serverTimestamp(),
-        archivedBy: userProfile.displayName || userProfile.email || "Unknown",
-      }
-    : {};
+    // NOTE: "ARCHIVED" is NOT in the status pipeline dropdown and will never be
+    // passed here. Archiving goes through handleArchiveConfirm exclusively.
+    await updateDoc(doc(db, "papers", docId), {
+      status: newStatus,
+      ...modifierFields(),
+      activityLog: arrayUnion({
+        text: `Status updated to "${newStatus}"`,
+        by:   userProfile.displayName,
+        at:   new Date().toISOString(),
+      }),
+    });
+  }
 
-  await updateDoc(doc(db, "papers", docId), {
-    status: newStatus,
-    ...archiveFields,
-    ...modifierFields(),
-    activityLog: arrayUnion({
-      text: `Status updated to "${newStatus}"`,
-      by:   userProfile.displayName,
-      at:   new Date().toISOString(),
-    }),
-  });
-}
+  // ── Archive: the ONLY place that writes hidden+archivedAt+archivedBy ────────
+  // This bypasses handleStatusChange entirely. Do not merge these two paths.
+  async function handleArchiveConfirm() {
+    if (!archiveTarget) return;
+    setArchiveSaving(true);
+    await updateDoc(doc(db, "papers", archiveTarget.id), {
+      status:     "ARCHIVED",
+      hidden:     true,
+      archivedAt: serverTimestamp(),
+      archivedBy: userProfile.displayName || userProfile.email || "Unknown",
+      ...modifierFields(),
+      activityLog: arrayUnion({
+        text: `Document archived by ${userProfile.displayName || userProfile.email}`,
+        by:   userProfile.displayName,
+        at:   new Date().toISOString(),
+      }),
+    });
+    // Collapse the row and clear the target — the doc will vanish from the list
+    // automatically because the snapshot filter excludes hidden:true docs.
+    setExpanded((prev) => { const n = { ...prev }; delete n[archiveTarget.id]; return n; });
+    setArchiveTarget(null);
+    setArchiveSaving(false);
+  }
 
   async function handleSaveDetails(docId, statusLabel, details) {
     const key = toKey(statusLabel);
@@ -649,7 +747,8 @@ export default function Documents() {
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
-  // SURGICAL: exclude hidden (archived) docs — double safety net on top of snapshot filter
+  // ARCHIVE RULE: double safety net — hidden docs are already excluded in the
+  // snapshot above, but this filter ensures nothing leaks through stale state.
   const filtered = documents.filter(
     (d) => d.projectId && !d.hidden &&
       (filterStatus === "All" || d.status === filterStatus) &&
@@ -660,6 +759,17 @@ export default function Documents() {
 
   return (
     <div style={S.page}>
+
+      {/* Archive confirmation modal */}
+      {archiveTarget && (
+        <ArchiveConfirmModal
+          documentName={archiveTarget.subject}
+          onConfirm={handleArchiveConfirm}
+          onClose={() => { if (!archiveSaving) setArchiveTarget(null); }}
+          saving={archiveSaving}
+        />
+      )}
+
       <div style={S.header}>
         <div style={S.pageTitle}>Documents</div>
         <button style={S.btn(true)} onClick={() => setShowForm(true)}>+ Add Document</button>
@@ -734,6 +844,7 @@ export default function Documents() {
                           onAddCustomItem={(label)          => handleAddCustomItem(d.id, label, d)}
                           onAssignMember={(uid)             => handleAssignMember(d.id, uid)}
                           onDelete={()                      => handleDelete(d.id)}
+                          onArchive={()                     => setArchiveTarget({ id: d.id, subject: d.subject })}
                         />
                       </td>
                     </tr>

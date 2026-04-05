@@ -616,12 +616,20 @@ function DetailsPanel({
           Archive writes hidden+archivedAt+archivedBy — NOT via handleStatusChange.
       ────────────────────────────────────────────────────────────────────── */}
       <div style={S.divider} />
+      {subjectType === "CTE" && !d.statusDetails?.CTE_VARS?.unworkableDays && (
+        <div style={{ fontSize: "11px", color: "#8a6000", background: "#fff8e1", border: "1px solid #8a6000", borderRadius: "6px", padding: "7px 10px", marginBottom: "8px" }}>
+          ⚠ CTE Variables (Unworkable Days) must be filled before this document can be archived.
+        </div>
+      )}
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
         <button
+          disabled={subjectType === "CTE" && !d.statusDetails?.CTE_VARS?.unworkableDays}
           style={{
-            padding: "5px 12px", borderRadius: "6px", cursor: "pointer",
+            padding: "5px 12px", borderRadius: "6px",
             fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "11px",
             border: "1px solid #8a6000", background: "transparent", color: "#8a6000",
+            cursor: subjectType === "CTE" && !d.statusDetails?.CTE_VARS?.unworkableDays ? "not-allowed" : "pointer",
+            opacity: subjectType === "CTE" && !d.statusDetails?.CTE_VARS?.unworkableDays ? 0.45 : 1,
           }}
           onClick={onArchive}
         >

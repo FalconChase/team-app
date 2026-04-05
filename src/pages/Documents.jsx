@@ -34,14 +34,9 @@ const DEFAULT_SUBJECT_TYPES = [
   "RPDM",
   "REVISED PLAN",
   "AS BUILT PLAN",
-  "CERTIFICATE OF COMPLETION",
-  "CERTIFICATE OF ACCEPTANCE",
 ];
 
 const NUMBERED_TYPES = new Set(["V.O.", "CTE", "W.S.O.", "W.R.O.", "RPDM"]);
-
-// ─── Closure subject types ────────────────────────────────────────────────────
-const CLOSURE_TYPES = new Set(["CERTIFICATE OF COMPLETION", "CERTIFICATE OF ACCEPTANCE"]);
 
 const DEFAULT_LACKING_ITEMS = {
   "AS-STAKED PLAN": ["Location Plan", "As-Staked Drawing", "Survey Notes", "Contractor's Certification"],
@@ -68,6 +63,10 @@ const STATUS_COLORS = {
   "FOR SUBMISSION ON GOOGLE DOCS": ["#f0eee8", "#5a5a5a"],
 };
 
+// ─── CTE: statuses that require CTE vars to be filled before advancing ────────
+// Any status transition OUT of these requires cteVars to be complete
+const CTE_GATED_STATUSES = new Set(["PRECOMPILING"]);
+
 const toKey   = (str) => str.replace(/\s+/g, "_");
 const getClr  = (st)  => STATUS_COLORS[st] || ["#eee", "#555"];
 
@@ -88,11 +87,19 @@ function composeLabel(type, num, rpdmRef) {
   }
 }
 
-// ─── Stage visibility helper ──────────────────────────────────────────────────
-function getVisibleStatuses(subjectType, allStatuses, config) {
-  const typeConfig = config?.[subjectType];
-  if (!typeConfig?.visibleStatuses?.length) return allStatuses;
-  return allStatuses.filter((s) => typeConfig.visibleStatuses.includes(s));
+// ─── Compute revised expiry from a base expiry date + days added ───────────────
+function addDaysToDate(dateStr, days) {
+  if (!dateStr || !days || Number(days) <= 0) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + Number(days));
+  return d.toISOString().split("T")[0];
+}
+
+function fmtDateDisplay(str) {
+  if (!str) return "—";
+  return new Date(str + "T00:00:00").toLocaleDateString("en-PH", {
+    month: "long", day: "numeric", year: "numeric",
+  });
 }
 
 const S = {
@@ -128,8 +135,13 @@ const S = {
   sectionLabel: { fontSize: "11px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" },
   divider:    { borderTop: "0.5px solid var(--border-main)", margin: "14px 0" },
   chkRow:     { display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "12px", cursor: "pointer", userSelect: "none", color: "var(--text-primary)" },
+  gateWarn:   { background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", fontSize: "12px", color: "#7a5200", marginBottom: "12px", fontWeight: "500" },
+  cteVarsBox: { background: "var(--bg-secondary)", border: "1px solid var(--border-main)", borderRadius: "8px", padding: "14px", marginBottom: "14px" },
+  cteAutoVal: { fontSize: "13px", fontWeight: "700", color: "var(--primary)", marginTop: "4px" },
+  ctePosted:  { background: "#d4edda", border: "1px solid #1a5e2a", borderRadius: "6px", padding: "10px 14px", fontSize: "12px", color: "#1a5e2a", marginTop: "10px", fontWeight: "600" },
 };
 
+// Inject the drain keyframe animation once into the document head
 function ensureDrainStyle() {
   const id = "lacking-drain-keyframes";
   if (!document.getElementById(id)) {
@@ -201,59 +213,134 @@ function LackingItem({ item, isCustom, onToggle, onRemove }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ArchiveConfirmModal
-// Shown when the Archive button is clicked — requires explicit confirmation.
-// This is the ONLY way a document gets archived. It does NOT go through
-// handleStatusChange. It writes hidden+archivedAt+archivedBy directly.
+// CteVarsSection — shown inside DetailsPanel for CTE documents
 // ═══════════════════════════════════════════════════════════════════════════════
-function ArchiveConfirmModal({ documentName, onConfirm, onClose, saving }) {
-  const [confirmed, setConfirmed] = useState(false);
+function CteVarsSection({ document: d, project, adminMode, onSaveCteVars }) {
+  const existing = d.statusDetails?.CTE_VARS || {};
+  const [unworkableDays, setUnworkableDays] = useState(existing.unworkableDays || "");
+  const [basis,          setBasis]          = useState(existing.basis || "");
+  const [saving,         setSaving]         = useState(false);
+
+  // Auto-compute revised expiry
+  // Base: project's current revised expiry if CTEs exist, else originalDateOfExpiry
+  const projectCtes       = (project?.ctes || []);
+  const totalExistingDays = projectCtes
+    .filter((c) => c.fromDocId !== d.id) // exclude this doc's own posted CTE if already there
+    .reduce((sum, c) => sum + (Number(c.days) || 0), 0);
+
+  let baseExpiry = project?.originalDateOfExpiry || null;
+  if (baseExpiry && totalExistingDays > 0) {
+    baseExpiry = addDaysToDate(baseExpiry, totalExistingDays);
+  }
+
+  const computedRevisedExpiry = unworkableDays && baseExpiry
+    ? addDaysToDate(baseExpiry, Number(unworkableDays))
+    : null;
+
+  const isPosted   = !!existing.postedToProject;
+  const isFilled   = !!(existing.unworkableDays);
+
+  async function handleSave() {
+    if (!unworkableDays || Number(unworkableDays) <= 0) {
+      alert("Please enter a valid number of unworkable days (must be greater than 0).");
+      return;
+    }
+    setSaving(true);
+    await onSaveCteVars({
+      unworkableDays: Number(unworkableDays),
+      basis: basis.trim(),
+      computedRevisedExpiry: computedRevisedExpiry || null,
+    });
+    setSaving(false);
+  }
 
   return (
-    <div style={{ ...S.modal, zIndex: 600 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ ...S.mBox, maxWidth: "420px", borderTop: "4px solid #8a6000" }}>
-        <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>
-          🗄️ Archive this document?
-        </div>
-        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "16px", background: "var(--bg-secondary)", borderRadius: "6px", padding: "10px 12px", fontWeight: "500" }}>
-          {documentName}
-        </div>
-
-        <div style={{ fontSize: "12px", color: "#8a6000", background: "#fff8e1", border: "1px solid #8a6000", borderRadius: "6px", padding: "10px 12px", marginBottom: "16px", lineHeight: "1.6" }}>
-          ⚠️ This document will be removed from the Documents list and Dashboard. It will be stored in the Archive Library under Records. This action is permanent and can only be reversed by an admin.
-        </div>
-
-        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", marginBottom: "20px" }}>
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
-            style={{ marginTop: "2px", flexShrink: 0 }}
-          />
-          <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>
-            I understand this document will be archived permanently.
+    <div style={S.cteVarsBox}>
+      <div style={{ ...S.sectionLabel, color: "var(--primary)", marginBottom: "12px" }}>
+        📋 CTE Variables
+        {isFilled && !isPosted && (
+          <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "500", color: "var(--warning)", background: "var(--warning-bg)", borderRadius: "4px", padding: "2px 7px" }}>
+            Required — must be filled before advancing
           </span>
-        </label>
+        )}
+        {!isFilled && (
+          <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "500", color: "var(--danger)", background: "#fcebeb", borderRadius: "4px", padding: "2px 7px" }}>
+            ⚠ Incomplete
+          </span>
+        )}
+        {isPosted && (
+          <span style={{ marginLeft: "8px", fontSize: "10px", fontWeight: "500", color: "#1a5e2a", background: "#d4edda", borderRadius: "4px", padding: "2px 7px" }}>
+            ✓ Posted to Project Record
+          </span>
+        )}
+      </div>
 
-        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-          <button style={S.btn(false)} onClick={onClose} disabled={saving}>Cancel</button>
-          <button
-            disabled={!confirmed || saving}
-            onClick={onConfirm}
-            style={{
-              padding: "8px 16px", borderRadius: "6px", cursor: confirmed && !saving ? "pointer" : "not-allowed",
-              fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "12px",
-              border: "none",
-              background: confirmed && !saving ? "#8a6000" : "var(--bg-secondary)",
-              color: confirmed && !saving ? "#fff" : "var(--text-disabled)",
-              fontWeight: "600",
-              transition: "all 0.15s",
-            }}
-          >
-            {saving ? "Archiving…" : "Archive Permanently"}
-          </button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px", marginBottom: "12px" }}>
+        <div>
+          <label style={S.label}>
+            Unworkable Days <span style={{ color: "var(--danger)" }}>*</span>
+          </label>
+          <input
+            style={{ ...S.input, borderColor: !unworkableDays ? "var(--danger)" : "var(--border-input)" }}
+            type="number"
+            min="1"
+            value={unworkableDays}
+            placeholder="e.g. 22"
+            disabled={!adminMode || isPosted}
+            onChange={(e) => setUnworkableDays(e.target.value)}
+          />
+        </div>
+        <div>
+          <label style={S.label}>Basis / Reason</label>
+          <input
+            style={S.input}
+            value={basis}
+            placeholder="e.g. Inclement Weather, PAGASA-certified"
+            disabled={!adminMode || isPosted}
+            onChange={(e) => setBasis(e.target.value)}
+          />
         </div>
       </div>
+
+      {/* Computed Revised Expiry — read only display */}
+      <div style={{ marginBottom: "12px" }}>
+        <label style={S.label}>Computed Revised Expiry Date</label>
+        {computedRevisedExpiry ? (
+          <div style={S.cteAutoVal}>{fmtDateDisplay(computedRevisedExpiry)}</div>
+        ) : (
+          <div style={{ fontSize: "12px", color: "var(--text-disabled)", fontStyle: "italic" }}>
+            {!project?.originalDateOfExpiry
+              ? "Project has no original expiry date set — please update the project first."
+              : "Enter unworkable days above to compute."}
+          </div>
+        )}
+        {baseExpiry && (
+          <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "3px" }}>
+            Based on current expiry: {fmtDateDisplay(baseExpiry)}
+          </div>
+        )}
+      </div>
+
+      {isPosted && (
+        <div style={S.ctePosted}>
+          ✓ These variables were posted to the project record when this document was approved.
+          {existing.postedAt && (
+            <span style={{ marginLeft: "6px", fontWeight: "400", fontSize: "11px" }}>
+              ({new Date(existing.postedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })})
+            </span>
+          )}
+        </div>
+      )}
+
+      {adminMode && !isPosted && (
+        <button
+          style={{ ...S.smBtn(true), marginTop: "4px" }}
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save CTE Variables"}
+        </button>
+      )}
     </div>
   );
 }
@@ -262,22 +349,37 @@ function ArchiveConfirmModal({ documentName, onConfirm, onClose, saving }) {
 // DetailsPanel
 // ═══════════════════════════════════════════════════════════════════════════════
 function DetailsPanel({
-  document: d, statuses, stageConfig, members, adminMode,
+  document: d, statuses, members, adminMode, project,
   onStatusChange, onSaveDetails, onToggleLacking,
   onRemoveLackingItem, onClearCompleted,
-  onAddCustomItem, onAssignMember, onDelete, onArchive,
+  onAddCustomItem, onAssignMember, onDelete,
+  onSaveCteVars,
 }) {
-  const { status } = d;
+  const { status, subjectType } = d;
   const key = toKey(status);
 
   const [localData, setLocalData] = useState(() => d.statusDetails?.[key] || {});
   const [newItem,   setNewItem]   = useState("");
   const [saving,    setSaving]    = useState(false);
+  const [gateError, setGateError] = useState("");
 
   useEffect(() => { ensureDrainStyle(); }, []);
   useEffect(() => { setLocalData(d.statusDetails?.[toKey(d.status)] || {}); }, [d.id, d.status, JSON.stringify(d.statusDetails)]);
 
   async function handleSave() { setSaving(true); await onSaveDetails(status, localData); setSaving(false); }
+
+  // ─── CTE Stage Gate check ─────────────────────────────────────────────────
+  function handleStatusChange(newStatus) {
+    setGateError("");
+    if (subjectType === "CTE" && CTE_GATED_STATUSES.has(status)) {
+      const cteVars = d.statusDetails?.CTE_VARS;
+      if (!cteVars?.unworkableDays || Number(cteVars.unworkableDays) <= 0) {
+        setGateError("⚠ Please fill in the CTE Variables (Unworkable Days) before advancing this document to the next stage.");
+        return;
+      }
+    }
+    onStatusChange(newStatus);
+  }
 
   const lacking  = d.statusDetails?.["LACKING"] || { items: [], customItems: [] };
   const allItems = [...(lacking.items || []), ...(lacking.customItems || [])];
@@ -287,22 +389,24 @@ function DetailsPanel({
 
   const isEarlyStatus  = status === "PRECOMPILING" || status === "FOR DoTS";
   const assignedMember = members?.find((m) => (m.uid || m.id) === d.assignedTo);
-  const visibleStatuses = getVisibleStatuses(d.subjectType, statuses, stageConfig);
-  const isClosureType   = CLOSURE_TYPES.has(d.subjectType);
 
   return (
     <div style={{ maxWidth: "600px" }}>
 
-      {isClosureType && (
-        <div style={{ marginBottom: "14px", background: "var(--info-bg, #e8f4fd)", border: "1px solid var(--info, #1565c0)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)", fontWeight: "600" }}>
-          📋 Closure Document — {d.subjectType}
-        </div>
-      )}
-
-      {isEarlyStatus && !isClosureType && (
+      {isEarlyStatus && (
         <div style={{ marginBottom: "14px", background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--warning)" }}>
           ⏳ DoTS details to be updated soon.
         </div>
+      )}
+
+      {/* ─── CTE Variables Section ─── */}
+      {subjectType === "CTE" && (
+        <CteVarsSection
+          document={d}
+          project={project}
+          adminMode={adminMode}
+          onSaveCteVars={onSaveCteVars}
+        />
       )}
 
       <div style={{ marginBottom: "14px" }}>
@@ -324,8 +428,18 @@ function DetailsPanel({
       {adminMode && (
         <>
           <div style={S.sectionLabel}>Change Status</div>
-          <select style={{ ...S.select, marginBottom: "4px" }} value={status} onChange={(e) => onStatusChange(e.target.value)}>
-            {visibleStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
+
+          {/* Gate warning shown above the select */}
+          {gateError && (
+            <div style={S.gateWarn}>{gateError}</div>
+          )}
+
+          <select
+            style={{ ...S.select, marginBottom: "4px" }}
+            value={status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+          >
+            {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
           <div style={S.divider} />
         </>
@@ -359,6 +473,9 @@ function DetailsPanel({
                 <button
                   onClick={onClearCompleted}
                   style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", cursor: "pointer", border: "1px solid var(--danger)", background: "var(--danger-bg)", color: "var(--danger)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontWeight: "600" }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = "0.8"}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+                  title="Remove all checked items immediately"
                 >
                   ✕ Clear completed
                 </button>
@@ -434,31 +551,12 @@ function DetailsPanel({
         </div>
       )}
 
-      {/* ── Archive + Delete row ─────────────────────────────────────────────
-          Archive is visible to ALL users.
-          Delete is visible to ADMINS only.
-          These are separate actions with separate confirms.
-          Archive writes hidden+archivedAt+archivedBy — NOT via handleStatusChange.
-      ────────────────────────────────────────────────────────────────────── */}
-      <div style={S.divider} />
-      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-        <button
-          style={{
-            padding: "5px 12px", borderRadius: "6px", cursor: "pointer",
-            fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", fontSize: "11px",
-            border: "1px solid #8a6000",
-            background: "transparent",
-            color: "#8a6000",
-          }}
-          onClick={onArchive}
-        >
-          🗄️ Archive Document
-        </button>
-        {adminMode && (
+      {adminMode && (
+        <>
+          <div style={S.divider} />
           <button style={S.smBtn(false, true)} onClick={onDelete}>Delete Document</button>
-        )}
-      </div>
-
+        </>
+      )}
     </div>
   );
 }
@@ -466,16 +564,13 @@ function DetailsPanel({
 // ═══════════════════════════════════════════════════════════════════════════════
 // AddDocumentModal
 // ═══════════════════════════════════════════════════════════════════════════════
-function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subjectTypes, members, adminMode, onSave, onClose }) {
+function AddDocumentModal({ form, setForm, projects, statuses, subjectTypes, members, adminMode, onSave, onClose }) {
   const needsNum = NUMBERED_TYPES.has(form.subjectType);
   const isRpdm   = form.subjectType === "RPDM";
   const preview  = needsNum ? composeLabel(form.subjectType, form.subjectNum, form.rpdmRef) : null;
   const [saving, setSaving] = useState(false);
 
   async function handleSave() { setSaving(true); await onSave(); setSaving(false); }
-
-  const visibleStatuses = getVisibleStatuses(form.subjectType, statuses, stageConfig);
-  const isClosureType   = CLOSURE_TYPES.has(form.subjectType);
 
   return (
     <div style={S.modal} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -489,20 +584,9 @@ function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subj
         </select>
 
         <label style={S.label}>Subject Type *</label>
-        <select style={{ ...S.input, marginBottom: "12px" }} value={form.subjectType}
-          onChange={(e) => {
-            const newType    = e.target.value;
-            const newVisible = getVisibleStatuses(newType, statuses, stageConfig);
-            setForm((f) => ({ ...f, subjectType: newType, subjectNum: 1, rpdmRef: "", status: newVisible[0] || statuses[0] }));
-          }}>
+        <select style={{ ...S.input, marginBottom: "12px" }} value={form.subjectType} onChange={(e) => setForm((f) => ({ ...f, subjectType: e.target.value, subjectNum: 1, rpdmRef: "" }))}>
           {subjectTypes.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-
-        {isClosureType && (
-          <div style={{ marginBottom: "12px", background: "var(--info-bg, #e8f4fd)", border: "1px solid var(--info, #1565c0)", borderRadius: "6px", padding: "8px 12px", fontSize: "11px", color: "var(--info, #1565c0)", fontWeight: "600" }}>
-            📋 Closure Document — applicable stages have been pre-filtered.
-          </div>
-        )}
 
         {needsNum && (
           <>
@@ -526,7 +610,7 @@ function AddDocumentModal({ form, setForm, projects, statuses, stageConfig, subj
 
         <label style={S.label}>Initial Status</label>
         <select style={{ ...S.input, marginBottom: "12px" }} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-          {visibleStatuses.map((st) => <option key={st} value={st}>{st}</option>)}
+          {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
 
         <label style={S.label}>DoTS Date</label>
@@ -577,10 +661,6 @@ export default function Documents() {
   const [filterProj,   setFilterProj]   = useState("All");
   const [form,         setForm]         = useState(BLANK_FORM);
 
-  // ── Archive modal state ────────────────────────────────────────────────────
-  const [archiveTarget,  setArchiveTarget]  = useState(null); // { id, subject }
-  const [archiveSaving,  setArchiveSaving]  = useState(false);
-
   const pendingScrollId = useRef(null);
 
   useEffect(() => {
@@ -593,14 +673,10 @@ export default function Documents() {
     if (team?.documentSubjectTypes?.length) setSubjectTypes(team.documentSubjectTypes);
   }, [team]);
 
-  // ARCHIVE RULE: snapshot excludes hidden docs so archived docs never appear here.
-  // Dashboard.jsx has the same filter. Both must stay in sync.
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
-    return onSnapshot(q, (snap) =>
-      setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !d.hidden))
-    );
+    return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
   }, [userProfile?.teamId]);
 
   useEffect(() => {
@@ -625,9 +701,8 @@ export default function Documents() {
     pendingScrollId.current = null;
   }, [documents]);
 
-  const stageConfig = team?.subjectTypeStageConfig || {};
-  const getStage    = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
-  const toggleRow   = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  const getStage  = (s) => { const i = statuses.indexOf(s); return i === -1 ? "—" : `${i + 1}/${statuses.length}`; };
+  const toggleRow = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   function modifierFields() {
     return {
@@ -657,42 +732,63 @@ export default function Documents() {
     setForm(BLANK_FORM);
   }
 
-  async function handleStatusChange(docId, newStatus) {
-    // NOTE: "ARCHIVED" is NOT in the status pipeline dropdown and will never be
-    // passed here. Archiving goes through handleArchiveConfirm exclusively.
-    await updateDoc(doc(db, "papers", docId), {
-      status: newStatus,
+  // ─── Auto-post CTE to project record when status → APPROVED ───────────────
+  async function postCteToProject(d) {
+    if (d.subjectType !== "CTE") return;
+    const cteVars = d.statusDetails?.CTE_VARS;
+    if (!cteVars?.unworkableDays) return;
+
+    // Find the project Firestore doc
+    const project = projects.find((p) => p.id === d.projectId);
+    if (!project) return;
+
+    const newCteEntry = {
+      id:          `cte_doc_${d.id}`,
+      label:       d.subject,                        // e.g. "CTE#1"
+      days:        Number(cteVars.unworkableDays),
+      basis:       cteVars.basis || "",
+      revisedExpiry: cteVars.computedRevisedExpiry || null,
+      fromDocId:   d.id,                             // marks it as document-sourced
+      autoPosted:  true,                             // distinguishes from manually added
+      postedAt:    new Date().toISOString(),
+      postedBy:    userProfile.displayName || userProfile.email || "Unknown",
+    };
+
+    const existingCtes = project.ctes || [];
+    // Avoid duplicate — if this doc was already posted, replace it
+    const filtered = existingCtes.filter((c) => c.fromDocId !== d.id);
+    const newCtes  = [...filtered, newCteEntry];
+
+    await updateDoc(doc(db, "teams", userProfile.teamId, "projects", project.id), {
+      ctes: newCtes,
+    });
+
+    // Mark cteVars as posted on the paper itself
+    await updateDoc(doc(db, "papers", d.id), {
+      "statusDetails.CTE_VARS.postedToProject": true,
+      "statusDetails.CTE_VARS.postedAt": new Date().toISOString(),
       ...modifierFields(),
       activityLog: arrayUnion({
-        text: `Status updated to "${newStatus}"`,
-        by:   userProfile.displayName,
-        at:   new Date().toISOString(),
+        text: `CTE variables auto-posted to project record (${Number(cteVars.unworkableDays)} unworkable days)`,
+        by: userProfile.displayName,
+        at: new Date().toISOString(),
       }),
     });
   }
 
-  // ── Archive: the ONLY place that writes hidden+archivedAt+archivedBy ────────
-  // This bypasses handleStatusChange entirely. Do not merge these two paths.
-  async function handleArchiveConfirm() {
-    if (!archiveTarget) return;
-    setArchiveSaving(true);
-    await updateDoc(doc(db, "papers", archiveTarget.id), {
-      status:     "ARCHIVED",
-      hidden:     true,
-      archivedAt: serverTimestamp(),
-      archivedBy: userProfile.displayName || userProfile.email || "Unknown",
+  async function handleStatusChange(docId, newStatus) {
+    const d = documents.find((doc) => doc.id === docId);
+
+    // If advancing to APPROVED and this is a CTE — post vars to project
+    if (newStatus === "APPROVED" && d?.subjectType === "CTE") {
+      await postCteToProject(d);
+    }
+
+    await updateDoc(doc(db, "papers", docId), {
+      status: newStatus,
       ...modifierFields(),
-      activityLog: arrayUnion({
-        text: `Document archived by ${userProfile.displayName || userProfile.email}`,
-        by:   userProfile.displayName,
-        at:   new Date().toISOString(),
-      }),
+      activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
-    // Collapse the row and clear the target — the doc will vanish from the list
-    // automatically because the snapshot filter excludes hidden:true docs.
-    setExpanded((prev) => { const n = { ...prev }; delete n[archiveTarget.id]; return n; });
-    setArchiveTarget(null);
-    setArchiveSaving(false);
   }
 
   async function handleSaveDetails(docId, statusLabel, details) {
@@ -704,18 +800,42 @@ export default function Documents() {
     });
   }
 
+  // ─── Save CTE variables ───────────────────────────────────────────────────
+  async function handleSaveCteVars(docId, vars) {
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.CTE_VARS": {
+        unworkableDays:       vars.unworkableDays,
+        basis:                vars.basis,
+        computedRevisedExpiry: vars.computedRevisedExpiry,
+        postedToProject:      false,
+      },
+      ...modifierFields(),
+      activityLog: arrayUnion({
+        text: `CTE variables saved — ${vars.unworkableDays} unworkable days${vars.basis ? `, basis: ${vars.basis}` : ""}`,
+        by: userProfile.displayName,
+        at: new Date().toISOString(),
+      }),
+    });
+  }
+
   async function handleToggleLacking(docId, itemId, isCustom, currentDoc) {
     const field    = isCustom ? "customItems" : "items";
     const existing = currentDoc.statusDetails?.LACKING || { items: [], customItems: [] };
     const updated  = { ...existing, [field]: existing[field].map((it) => it.id === itemId ? { ...it, checked: !it.checked } : it) };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, ...modifierFields() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...modifierFields(),
+    });
   }
 
   async function handleRemoveLackingItem(docId, itemId, isCustom, currentDoc) {
     const field    = isCustom ? "customItems" : "items";
     const existing = currentDoc.statusDetails?.LACKING || { items: [], customItems: [] };
     const updated  = { ...existing, [field]: existing[field].filter((it) => it.id !== itemId) };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, ...modifierFields() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...modifierFields(),
+    });
   }
 
   async function handleClearCompleted(docId, currentDoc) {
@@ -724,13 +844,19 @@ export default function Documents() {
       items:       existing.items.filter((it) => !it.checked),
       customItems: existing.customItems.filter((it) => !it.checked),
     };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, ...modifierFields() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...modifierFields(),
+    });
   }
 
   async function handleAddCustomItem(docId, label, currentDoc) {
     const existing = currentDoc.statusDetails?.LACKING || { items: [], customItems: [] };
     const updated  = { ...existing, customItems: [...(existing.customItems || []), { id: `custom_${Date.now()}`, label, checked: false }] };
-    await updateDoc(doc(db, "papers", docId), { "statusDetails.LACKING": updated, ...modifierFields() });
+    await updateDoc(doc(db, "papers", docId), {
+      "statusDetails.LACKING": updated,
+      ...modifierFields(),
+    });
   }
 
   async function handleAssignMember(docId, uid) {
@@ -747,10 +873,8 @@ export default function Documents() {
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
-  // ARCHIVE RULE: double safety net — hidden docs are already excluded in the
-  // snapshot above, but this filter ensures nothing leaks through stale state.
   const filtered = documents.filter(
-    (d) => d.projectId && !d.hidden &&
+    (d) => d.projectId &&
       (filterStatus === "All" || d.status === filterStatus) &&
       (filterProj   === "All" || d.projectId === filterProj)
   );
@@ -759,17 +883,6 @@ export default function Documents() {
 
   return (
     <div style={S.page}>
-
-      {/* Archive confirmation modal */}
-      {archiveTarget && (
-        <ArchiveConfirmModal
-          documentName={archiveTarget.subject}
-          onConfirm={handleArchiveConfirm}
-          onClose={() => { if (!archiveSaving) setArchiveTarget(null); }}
-          saving={archiveSaving}
-        />
-      )}
-
       <div style={S.header}>
         <div style={S.pageTitle}>Documents</div>
         <button style={S.btn(true)} onClick={() => setShowForm(true)}>+ Add Document</button>
@@ -804,6 +917,10 @@ export default function Documents() {
             {filtered.map((d) => {
               const project = projects.find((p) => p.id === d.projectId);
               const isOpen  = !!expanded[d.id];
+
+              // Show CTE incomplete badge on the row if CTE vars not yet filled
+              const cteMissing = d.subjectType === "CTE" && !d.statusDetails?.CTE_VARS?.unworkableDays;
+
               return (
                 <React.Fragment key={d.id}>
                   <tr
@@ -814,7 +931,14 @@ export default function Documents() {
                   >
                     <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{project?.projectId || d.projectId || "—"}</td>
                     <td style={S.td}>
-                      <div>{d.subject}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        {d.subject}
+                        {cteMissing && (
+                          <span style={{ fontSize: "9px", fontWeight: "700", background: "#fcebeb", color: "#a32d2d", borderRadius: "4px", padding: "2px 6px", whiteSpace: "nowrap" }}>
+                            CTE vars needed
+                          </span>
+                        )}
+                      </div>
                       {d.dotsDate && (
                         <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
                           DoTS: {new Date(d.dotsDate + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
@@ -833,9 +957,9 @@ export default function Documents() {
                         <DetailsPanel
                           document={d}
                           statuses={statuses}
-                          stageConfig={stageConfig}
                           members={members}
                           adminMode={admin}
+                          project={project}
                           onStatusChange={(newSt)           => handleStatusChange(d.id, newSt)}
                           onSaveDetails={(st, data)         => handleSaveDetails(d.id, st, data)}
                           onToggleLacking={(id, custom)     => handleToggleLacking(d.id, id, custom, d)}
@@ -844,7 +968,7 @@ export default function Documents() {
                           onAddCustomItem={(label)          => handleAddCustomItem(d.id, label, d)}
                           onAssignMember={(uid)             => handleAssignMember(d.id, uid)}
                           onDelete={()                      => handleDelete(d.id)}
-                          onArchive={()                     => setArchiveTarget({ id: d.id, subject: d.subject })}
+                          onSaveCteVars={(vars)             => handleSaveCteVars(d.id, vars)}
                         />
                       </td>
                     </tr>
@@ -859,7 +983,7 @@ export default function Documents() {
       {showForm && (
         <AddDocumentModal
           form={form} setForm={setForm} projects={projects} statuses={statuses}
-          stageConfig={stageConfig} subjectTypes={subjectTypes} members={members} adminMode={admin}
+          subjectTypes={subjectTypes} members={members} adminMode={admin}
           onSave={saveDocument}
           onClose={() => { setShowForm(false); setForm(BLANK_FORM); }}
         />

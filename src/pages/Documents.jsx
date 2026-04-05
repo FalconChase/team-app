@@ -866,6 +866,19 @@ export default function Documents() {
   // This bypasses handleStatusChange entirely. Do not merge these two paths.
   async function handleArchiveConfirm() {
     if (!archiveTarget) return;
+
+    // Hard guard — re-check from live documents state, not UI input state.
+    // This prevents bypass by clearing fields without saving.
+    const liveDoc = documents.find((d) => d.id === archiveTarget.id);
+    if (liveDoc?.subjectType === "CTE") {
+      const savedDays = liveDoc?.statusDetails?.CTE_VARS?.unworkableDays;
+      if (!savedDays || Number(savedDays) <= 0) {
+        alert("Cannot archive: CTE Variables (Unworkable Days) must be saved before archiving this document.");
+        setArchiveTarget(null);
+        return;
+      }
+    }
+
     setArchiveSaving(true);
     await updateDoc(doc(db, "papers", archiveTarget.id), {
       status:     "ARCHIVED",

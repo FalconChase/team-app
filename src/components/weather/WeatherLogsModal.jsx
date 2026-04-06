@@ -5,6 +5,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+// ── AUDIT LOG ──────────────────────────────────────────────────────────────────
+import { logAction } from '../../utils/logAction';
 
 export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, onLoad }) {
   const { userProfile } = useAuth();
@@ -90,6 +92,15 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
         collection(db, 'teams', userProfile.teamId, 'weatherLogs'),
         snapshot
       );
+
+      // ── LOG: snapshot saved ───────────────────────────────────────────────
+      logAction({
+        teamId:      userProfile.teamId,
+        action:      `Saved weather snapshot "${label.trim()}"`,
+        category:    'weather',
+        performedBy: userProfile.displayName || userProfile.email || 'Unknown',
+      });
+
       setSuccessMsg(`Snapshot "${label.trim()}" saved successfully.`);
     } catch (err) {
       console.error('Save error:', err);
@@ -100,12 +111,24 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
   }
 
   async function handleDelete(logId) {
+    // Capture label before deleting
+    const targetLog = logs.find(l => l.id === logId);
+    const snapLabel = targetLog?.label || logId;
+
     setDeletingId(logId);
     setError('');
     try {
       await deleteDoc(doc(db, 'teams', userProfile.teamId, 'weatherLogs', logId));
       setLogs(prev => prev.filter(l => l.id !== logId));
       setConfirmDeleteId(null);
+
+      // ── LOG: snapshot deleted ─────────────────────────────────────────────
+      logAction({
+        teamId:      userProfile.teamId,
+        action:      `Deleted weather snapshot "${snapLabel}"`,
+        category:    'weather',
+        performedBy: userProfile.displayName || userProfile.email || 'Unknown',
+      });
     } catch (err) {
       console.error('Delete error:', err);
       setError('Failed to delete snapshot.');
@@ -118,6 +141,15 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
     // Unflatten: each row string "1,2,3,..." → array of numbers
     const grid = log.weatherData.map(row => row.split(',').map(Number));
     onLoad(log.contractInfo, grid);
+
+    // ── LOG: snapshot loaded ──────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Loaded weather snapshot "${log.label}"`,
+      category:    'weather',
+      performedBy: userProfile.displayName || userProfile.email || 'Unknown',
+    });
+
     onClose();
   }
 
@@ -182,7 +214,7 @@ export function WeatherLogsModal({ isOpen, onClose, contractInfo, weatherData, o
                   <strong>{contractInfo.projectName || <em>empty</em>}</strong>
                 </div>
                 <div className="wt-logs-preview-row">
-<span>Period</span>
+                  <span>Period</span>
                   <strong>{contractInfo.month || '—'} {contractInfo.year || ''}</strong>
                 </div>
               </div>

@@ -5,6 +5,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
+// ── AUDIT LOG ──────────────────────────────────────────────────────────────────
+import { logAction } from "../utils/logAction";
 import styles from "./Projects.module.css";
 
 // ── Compute Helpers ───────────────────────────────────────────────────────────
@@ -141,6 +143,15 @@ export default function Projects() {
         ctes: [], revisedExpiryDates: [], revisedAmounts: [],
         createdAt: serverTimestamp(), createdBy: userProfile.uid, teamId,
       });
+
+      // ── LOG: project added ───────────────────────────────────────────────
+      logAction({
+        teamId,
+        action:      `Added project "${pid}"`,
+        category:    "project",
+        performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      });
+
       setShowAddModal(false);
       setForm(emptyForm());
       fetchProjects();
@@ -185,6 +196,15 @@ export default function Projects() {
         originalCost:         editForm.originalCost        ? parseFloat(editForm.originalCost.toString().replace(/,/g, "")) : null,
       };
       await updateDoc(doc(db, "teams", teamId, "projects", editProject.docId), updates);
+
+      // ── LOG: project details edited ──────────────────────────────────────
+      logAction({
+        teamId,
+        action:      `Updated details for project "${updates.projectId}"`,
+        category:    "project",
+        performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      });
+
       setProjects((prev) => prev.map((p) => p.docId === editProject.docId ? { ...p, ...updates } : p));
       setEditProject(null);
     } catch (err) {
@@ -198,13 +218,13 @@ export default function Projects() {
   // ── CTE Management ────────────────────────────────────────────────────────
   function openAddCTE(p) {
     const nextNum = (p.ctes?.length || 0) + 1;
-    setCteTarget({ docId: p.docId, ctes: p.ctes || [], existingCte: null });
+    setCteTarget({ docId: p.docId, projectId: p.projectId, ctes: p.ctes || [], existingCte: null });
     setCteForm({ label: `CTE #${nextNum}`, inputMode: "days", days: "", expiryDate: "" });
     setCteError("");
   }
 
   function openEditCTE(p, cte, index) {
-    setCteTarget({ docId: p.docId, ctes: p.ctes || [], existingCte: { ...cte, index } });
+    setCteTarget({ docId: p.docId, projectId: p.projectId, ctes: p.ctes || [], existingCte: { ...cte, index } });
     setCteForm({ label: cte.label, inputMode: "days", days: cte.days?.toString() || "", expiryDate: "" });
     setCteError("");
   }
@@ -232,7 +252,8 @@ export default function Projects() {
     setCteSubmitting(true);
     try {
       let newCtes;
-      if (cteTarget.existingCte) {
+      const isEdit = !!cteTarget.existingCte;
+      if (isEdit) {
         newCtes = cteTarget.ctes.map((c, i) =>
           i === cteTarget.existingCte.index ? { ...c, label: cteForm.label.trim(), days } : c
         );
@@ -240,6 +261,17 @@ export default function Projects() {
         newCtes = [...cteTarget.ctes, { id: `cte_${Date.now()}`, label: cteForm.label.trim(), days }];
       }
       await updateDoc(doc(db, "teams", teamId, "projects", cteTarget.docId), { ctes: newCtes });
+
+      // ── LOG: CTE added or edited ─────────────────────────────────────────
+      logAction({
+        teamId,
+        action:      isEdit
+          ? `Updated CTE "${cteForm.label.trim()}" on project "${cteTarget.projectId}"`
+          : `Added CTE "${cteForm.label.trim()}" to project "${cteTarget.projectId}"`,
+        category:    "project",
+        performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      });
+
       setProjects((prev) => prev.map((p) => p.docId === cteTarget.docId ? { ...p, ctes: newCtes } : p));
       setCteTarget(null);
     } catch (err) {
@@ -250,26 +282,31 @@ export default function Projects() {
     }
   }
 
-async function handleDeleteCTE(p, index) {
-    const cte = p.ctes[index];
+  async function handleDeleteCTE(p, index) {
+    const cteLabel = p.ctes[index]?.label || `CTE #${index + 1}`;
     const newCtes = p.ctes.filter((_, i) => i !== index);
     try {
       await updateDoc(doc(db, "teams", teamId, "projects", p.docId), { ctes: newCtes });
+
+      // ── LOG: CTE deleted ─────────────────────────────────────────────────
+      logAction({
+        teamId,
+        action:      `Deleted CTE "${cteLabel}" from project "${p.projectId}"`,
+        category:    "project",
+        performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      });
+
       setProjects((prev) => prev.map((pr) => pr.docId === p.docId ? { ...pr, ctes: newCtes } : pr));
-      if (cte.fromDocId) {
-        await updateDoc(doc(db, "teams", teamId, "papers", cte.fromDocId), {
-          "statusDetails.CTE_VARS.postedToProject": false,
-        });
-      }
     } catch (err) { console.error("Failed to delete CTE:", err); }
   }
 
   // ── Accomplishment ────────────────────────────────────────────────────────
   function openEditAccomplishment(p) {
     setEditAccomp({
-      docId:   p.docId,
-      planned: p.plannedAccomplishment?.toString() ?? "",
-      actual:  p.actualAccomplishment?.toString()  ?? "",
+      docId:     p.docId,
+      projectId: p.projectId,
+      planned:   p.plannedAccomplishment?.toString() ?? "",
+      actual:    p.actualAccomplishment?.toString()  ?? "",
     });
     setAccompError("");
   }
@@ -289,6 +326,15 @@ async function handleDeleteCTE(p, index) {
         plannedAccomplishment: planned,
         actualAccomplishment:  actual,
       });
+
+      // ── LOG: accomplishment updated ──────────────────────────────────────
+      logAction({
+        teamId,
+        action:      `Updated accomplishment for project "${editAccomp.projectId}"`,
+        category:    "project",
+        performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      });
+
       setProjects((prev) =>
         prev.map((p) => p.docId === editAccomp.docId
           ? { ...p, plannedAccomplishment: planned, actualAccomplishment: actual } : p)

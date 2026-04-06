@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   collection, query, where, onSnapshot,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy
@@ -7,6 +6,8 @@ import {
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTeam } from "../contexts/TeamContext";
+// ── AUDIT LOG ──────────────────────────────────────────────────────────────────
+import { logAction } from "../utils/logAction";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(str) {
@@ -36,11 +37,11 @@ function emptyForm() {
   };
 }
 
-// ─── PartyField ───────────────────────────────────────────────────────────────
+// ─── PartyField — reusable From/To selector ───────────────────────────────────
 function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, members, departments }) {
-  const type      = form[typeKey];
-  const value     = form[valueKey];
-  const freeText  = form[freeTextKey];
+  const type     = form[typeKey];
+  const value    = form[valueKey];
+  const freeText = form[freeTextKey];
 
   const S = {
     group:   { display: "flex", flexDirection: "column", gap: "6px", flex: 1 },
@@ -76,29 +77,43 @@ function PartyField({ label, typeKey, valueKey, freeTextKey, form, setForm, memb
           ? (
             <select id={valueKey} name={valueKey} style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
               <option value="">— Select member —</option>
-              {members.map(m => <option key={m.uid || m.id} value={m.uid || m.id}>{m.displayName}</option>)}
+              {members.map(m => (
+                <option key={m.uid || m.id} value={m.uid || m.id}>{m.displayName}</option>
+              ))}
             </select>
           )
-          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Member name" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Member name (no members loaded yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
+
       {type === "department" && (
         departments.length > 0
           ? (
             <select id={valueKey} name={valueKey} style={S.select} value={value} onChange={e => setForm(f => ({ ...f, [valueKey]: e.target.value }))}>
               <option value="">— Select department —</option>
-              {departments.map((d, i) => <option key={i} value={d}>{d}</option>)}
+              {departments.map((d, i) => (
+                <option key={i} value={d}>{d}</option>
+              ))}
             </select>
           )
-          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Department name" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+          : <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Department name (none configured yet)" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
       )}
+
       {type === "contractor" && (
-        <input id={freeTextKey} name={freeTextKey} autoComplete="off" style={S.input} placeholder="Contractor / external party name" value={freeText} onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))} />
+        <input
+          id={freeTextKey}
+          name={freeTextKey}
+          autoComplete="off"
+          style={S.input}
+          placeholder="Contractor / external party name"
+          value={freeText}
+          onChange={e => setForm(f => ({ ...f, [freeTextKey]: e.target.value }))}
+        />
       )}
     </div>
   );
 }
 
-// ─── DocumentRows ─────────────────────────────────────────────────────────────
+// ─── DocumentRows — add/remove document entries ───────────────────────────────
 function DocumentRows({ docs, setForm, readOnly }) {
   const S = {
     row:    { display: "grid", gridTemplateColumns: "140px 1fr auto", gap: "8px", alignItems: "center", marginBottom: "8px" },
@@ -107,9 +122,19 @@ function DocumentRows({ docs, setForm, readOnly }) {
     delBtn: { background: "none", border: "none", cursor: "pointer", color: "var(--border-input)", fontSize: "16px", padding: "0 4px", lineHeight: 1, transition: "color 0.15s" },
   };
 
-  function addDoc()               { setForm(f => ({ ...f, documents: [...f.documents, { docNumber: "", description: "" }] })); }
-  function removeDoc(i)           { setForm(f => ({ ...f, documents: f.documents.filter((_, idx) => idx !== i) })); }
-  function updateDoc(i, field, v) { setForm(f => { const docs = [...f.documents]; docs[i] = { ...docs[i], [field]: v }; return { ...f, documents: docs }; }); }
+  function addDoc() {
+    setForm(f => ({ ...f, documents: [...f.documents, { docNumber: "", description: "" }] }));
+  }
+  function removeDoc(i) {
+    setForm(f => ({ ...f, documents: f.documents.filter((_, idx) => idx !== i) }));
+  }
+  function updateDoc(i, field, val) {
+    setForm(f => {
+      const docs = [...f.documents];
+      docs[i] = { ...docs[i], [field]: val };
+      return { ...f, documents: docs };
+    });
+  }
 
   return (
     <div>
@@ -147,7 +172,7 @@ function DocumentRows({ docs, setForm, readOnly }) {
   );
 }
 
-// ─── RecordModal ──────────────────────────────────────────────────────────────
+// ─── RecordModal — create / edit / view ──────────────────────────────────────
 function RecordModal({ mode, record, projects, members, departments, teamId, userProfile, onClose, onSaved }) {
   const isView   = mode === "view";
   const isEdit   = mode === "edit";
@@ -186,8 +211,14 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
   async function handleSave() {
     if (!form.date)      return setError("Date is required.");
     if (!form.projectId) return setError("Project is required.");
+
     const fromLabel = resolvePartyLabel(form.fromType, form.fromValue, form.fromFreeText);
     const toLabel   = resolvePartyLabel(form.toType,   form.toValue,   form.toFreeText);
+
+    // Resolve project label for logging
+    const project = projects.find(p => p.id === form.projectId);
+    const projLabel = project?.projectId || project?.name || form.projectId;
+
     const payload = {
       teamId,
       date:      form.date,
@@ -198,18 +229,38 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
       documents: form.documents.filter(d => d.docNumber.trim() || d.description.trim()),
       remarks:   form.remarks,
     };
-    setSaving(true); setError("");
+
+    setSaving(true);
+    setError("");
     try {
       if (isCreate) {
         payload.createdBy = userProfile.displayName || userProfile.email;
         payload.createdAt = serverTimestamp();
         await addDoc(collection(db, "records"), payload);
+
+        // ── LOG: record created ──────────────────────────────────────────────
+        logAction({
+          teamId,
+          action:      `Added ${form.type === "IN" ? "incoming" : "outgoing"} record for project ${projLabel} (from: ${fromLabel}, to: ${toLabel})`,
+          category:    "record",
+          performedBy: userProfile.displayName || userProfile.email || "Unknown",
+        });
+
       } else {
         payload.lastModifiedBy = userProfile.displayName || userProfile.email;
         payload.lastModifiedAt = serverTimestamp();
         await updateDoc(doc(db, "records", record.id), payload);
+
+        // ── LOG: record edited ───────────────────────────────────────────────
+        logAction({
+          teamId,
+          action:      `Edited ${form.type === "IN" ? "incoming" : "outgoing"} record for project ${projLabel}`,
+          category:    "record",
+          performedBy: userProfile.displayName || userProfile.email || "Unknown",
+        });
       }
-      onSaved(); onClose();
+      onSaved();
+      onClose();
     } catch (e) {
       console.error(e);
       setError("Failed to save. Please try again.");
@@ -219,7 +270,6 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
   }
 
   const project = projects.find(p => p.id === (isView || isEdit ? record?.projectId : form.projectId));
-  const typeColor = form.type === "IN" ? { bg: "#e6f4ea", color: "#1a7a38" } : { bg: "#fff3e0", color: "#b45309" };
 
   const S = {
     overlay:  { position: "fixed", inset: 0, background: "rgba(10,24,40,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
@@ -242,12 +292,19 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
     errorMsg: { fontSize: "12px", color: "var(--danger)", marginBottom: "12px", padding: "8px 12px", background: "var(--danger-bg, #fcebeb)", borderRadius: "6px", border: "1px solid var(--danger)" },
   };
 
+  const typeColor = form.type === "IN"
+    ? { bg: "#e6f4ea", color: "#1a7a38" }
+    : { bg: "#fff3e0", color: "#b45309" };
+
   return (
     <div style={S.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={S.modal}>
+        {/* Header */}
         <div style={S.header}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={S.title}>{isCreate ? "New Record" : isEdit ? "Edit Record" : "Record Details"}</span>
+            <span style={S.title}>
+              {isCreate ? "New Record" : isEdit ? "Edit Record" : "Record Details"}
+            </span>
             {(isView || isEdit) && (
               <span style={{ ...S.typePill, background: typeColor.bg, color: typeColor.color }}>
                 {record.type === "IN" ? "▼ INCOMING" : "▲ OUTGOING"}
@@ -258,22 +315,32 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
         </div>
 
         <div style={S.body}>
+          {/* Date + Project */}
           <div style={S.row2}>
             <div>
               <span style={S.sLabel}>Date</span>
-              {isView ? <div style={S.viewVal}>{formatDate(record.date)}</div> : <input id="record-date" name="record-date" type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />}
+              {isView
+                ? <div style={S.viewVal}>{formatDate(record.date)}</div>
+                : <input id="record-date" name="record-date" type="date" style={S.input} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+              }
             </div>
             <div>
               <span style={S.sLabel}>Project</span>
-              {isView ? <div style={S.viewVal}>{project?.projectId || record.projectId || "—"}</div> : (
-                <select id="record-project" name="record-project" style={S.select} value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
-                  <option value="">— Select project —</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>)}
-                </select>
-              )}
+              {isView
+                ? <div style={S.viewVal}>{project?.projectId || record.projectId || "—"}</div>
+                : (
+                  <select id="record-project" name="record-project" style={S.select} value={form.projectId} onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}>
+                    <option value="">— Select project —</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>
+                    ))}
+                  </select>
+                )
+              }
             </div>
           </div>
 
+          {/* Type toggle */}
           {!isView && (
             <div style={{ marginBottom: "16px" }}>
               <span style={S.sLabel}>Type</span>
@@ -291,36 +358,46 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
 
           <div style={S.divider} />
 
-          {isView ? (
-            <div style={S.row2}>
-              <div>
-                <span style={S.sLabel}>From</span>
-                <div style={S.viewVal}>{record.from?.label || "—"}</div>
-                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.from?.type || ""}</div>
+          {/* From / To */}
+          {isView
+            ? (
+              <div style={S.row2}>
+                <div>
+                  <span style={S.sLabel}>From</span>
+                  <div style={S.viewVal}>{record.from?.label || "—"}</div>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.from?.type || ""}</div>
+                </div>
+                <div>
+                  <span style={S.sLabel}>To</span>
+                  <div style={S.viewVal}>{record.to?.label || "—"}</div>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.to?.type || ""}</div>
+                </div>
               </div>
-              <div>
-                <span style={S.sLabel}>To</span>
-                <div style={S.viewVal}>{record.to?.label || "—"}</div>
-                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "capitalize" }}>{record.to?.type || ""}</div>
+            )
+            : (
+              <div style={S.row2}>
+                <PartyField label="From" typeKey="fromType" valueKey="fromValue" freeTextKey="fromFreeText" form={form} setForm={setForm} members={members} departments={departments} />
+                <PartyField label="To"   typeKey="toType"   valueKey="toValue"   freeTextKey="toFreeText"   form={form} setForm={setForm} members={members} departments={departments} />
               </div>
-            </div>
-          ) : (
-            <div style={S.row2}>
-              <PartyField label="From" typeKey="fromType" valueKey="fromValue" freeTextKey="fromFreeText" form={form} setForm={setForm} members={members} departments={departments} />
-              <PartyField label="To"   typeKey="toType"   valueKey="toValue"   freeTextKey="toFreeText"   form={form} setForm={setForm} members={members} departments={departments} />
-            </div>
-          )}
+            )
+          }
 
           <div style={S.divider} />
 
+          {/* Documents */}
           <div style={S.section}>
             <span style={S.sLabel}>Attached Documents</span>
             {isView
-              ? (record.documents?.length ? <DocumentRows docs={record.documents} setForm={() => {}} readOnly /> : <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>No documents attached.</div>)
+              ? (
+                record.documents?.length
+                  ? <DocumentRows docs={record.documents} setForm={() => {}} readOnly />
+                  : <div style={{ fontSize: "12px", color: "var(--text-muted)", fontStyle: "italic" }}>No documents attached.</div>
+              )
               : <DocumentRows docs={form.documents} setForm={setForm} readOnly={false} />
             }
           </div>
 
+          {/* Remarks */}
           <div style={S.section}>
             <span style={S.sLabel}>Remarks</span>
             {isView
@@ -329,6 +406,7 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
             }
           </div>
 
+          {/* Meta info on view */}
           {isView && (
             <div style={{ fontSize: "11px", color: "var(--text-muted)", borderTop: "1px solid var(--border-light)", paddingTop: "12px", display: "flex", gap: "20px", flexWrap: "wrap" }}>
               {record.createdBy      && <span>Created by <strong>{record.createdBy}</strong></span>}
@@ -339,12 +417,16 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
           {error && <div style={S.errorMsg}>{error}</div>}
         </div>
 
-        {!isView ? (
+        {/* Footer */}
+        {!isView && (
           <div style={S.footer}>
             <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
-            <button style={S.saveBtn} onClick={handleSave} disabled={saving}>{saving ? "Saving…" : isCreate ? "Add Record" : "Save Changes"}</button>
+            <button style={S.saveBtn} onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : isCreate ? "Add Record" : "Save Changes"}
+            </button>
           </div>
-        ) : (
+        )}
+        {isView && (
           <div style={{ ...S.footer, justifyContent: "flex-end" }}>
             <button style={S.cancelBtn} onClick={onClose}>Close</button>
           </div>
@@ -354,7 +436,7 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
   );
 }
 
-// ─── DeleteConfirm ────────────────────────────────────────────────────────────
+// ─── DeleteConfirm modal ──────────────────────────────────────────────────────
 function DeleteConfirm({ record, onClose, onConfirm }) {
   const [deleting, setDeleting] = useState(false);
   async function handleDelete() {
@@ -387,12 +469,10 @@ function DeleteConfirm({ record, onClose, onConfirm }) {
 export default function Records() {
   const { userProfile }            = useAuth();
   const { team, members, isAdmin } = useTeam();
-  const navigate                   = useNavigate();
 
-  const [records,       setRecords]       = useState([]);
-  const [projects,      setProjects]      = useState([]);
-  const [archivedCount, setArchivedCount] = useState(0);
-  const [loading,       setLoading]       = useState(true);
+  const [records,  setRecords]  = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading,  setLoading]  = useState(true);
 
   const [filterType,    setFilterType]    = useState("All");
   const [filterProject, setFilterProject] = useState("All");
@@ -403,34 +483,28 @@ export default function Records() {
 
   const departments = team?.departments || [];
 
-  // ── Firestore: records ─────────────────────────────────────────────────────
+  // ── Firestore listeners ────────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
-    const q = query(collection(db, "records"), where("teamId", "==", userProfile.teamId), orderBy("date", "desc"));
-    return onSnapshot(q, snap => {
+    const q = query(
+      collection(db, "records"),
+      where("teamId", "==", userProfile.teamId),
+      orderBy("date", "desc")
+    );
+    const unsub = onSnapshot(q, snap => {
       setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
+    return unsub;
   }, [userProfile?.teamId]);
 
-  // ── Firestore: projects ────────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.teamId) return;
     const q = collection(db, "teams", userProfile.teamId, "projects");
     return onSnapshot(q, snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, [userProfile?.teamId]);
 
-  // ── Firestore: archived doc count ─────────────────────────────────────────
-  useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = query(
-      collection(db, "papers"),
-      where("teamId", "==", userProfile.teamId),
-      where("status", "==", "ARCHIVED")
-    );
-    return onSnapshot(q, snap => setArchivedCount(snap.size));
-  }, [userProfile?.teamId]);
-
+  // ── Filtered records ───────────────────────────────────────────────────────
   const filtered = records.filter(r => {
     if (filterType    !== "All" && r.type      !== filterType)    return false;
     if (filterProject !== "All" && r.projectId !== filterProject) return false;
@@ -438,10 +512,25 @@ export default function Records() {
     return true;
   });
 
+  // ── Delete ─────────────────────────────────────────────────────────────────
   async function handleDelete(id) {
+    // Capture record details before deletion for the log
+    const target     = records.find(r => r.id === id);
+    const project    = projects.find(p => p.id === target?.projectId);
+    const projLabel  = project?.projectId || project?.name || target?.projectId || "unknown project";
+
     await deleteDoc(doc(db, "records", id));
+
+    // ── LOG: record deleted ────────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Deleted ${target?.type === "IN" ? "incoming" : "outgoing"} record for project ${projLabel}`,
+      category:    "record",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+    });
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function projectLabel(projectId) {
     const p = projects.find(p => p.id === projectId);
     return p?.projectId || p?.name || projectId || "—";
@@ -453,55 +542,69 @@ export default function Records() {
   const hasFilters = filterType !== "All" || filterProject !== "All" || filterDate !== "";
 
   const S = {
-    page:      { fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", background: "var(--bg-page)", minHeight: "100vh", padding: "20px" },
-    header:    { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
-    title:     { fontSize: "18px", fontWeight: "600", color: "var(--text-primary)" },
-    subtitle:  { fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" },
-    statsRow:  { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "14px" },
-    stat:      { background: "var(--bg-card)", border: "0.5px solid var(--border-main)", borderRadius: "8px", padding: "14px", textAlign: "center" },
-    statNum:   (c) => ({ fontSize: "26px", fontWeight: "700", color: c || "var(--text-primary)" }),
-    statLbl:   { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" },
-    filters:   { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" },
-    select:    { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
-    dateInput: { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
-    addBtn:    { fontSize: "12px", padding: "7px 16px", borderRadius: "7px", border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", display: "flex", alignItems: "center", gap: "6px", transition: "opacity 0.15s" },
-    table:     { width: "100%", borderCollapse: "collapse", background: "var(--bg-card)", borderRadius: "8px", overflow: "hidden", border: "0.5px solid var(--border-main)" },
-    th:        { padding: "10px 14px", textAlign: "left", fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.6px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border-main)" },
-    td:        { padding: "11px 14px", fontSize: "12px", color: "var(--text-primary)", borderBottom: "0.5px solid var(--border-light)", verticalAlign: "middle" },
-    typePill:  (type) => ({ display: "inline-block", fontSize: "10px", fontWeight: "700", padding: "3px 9px", borderRadius: "10px", letterSpacing: "0.4px", background: type === "IN" ? "#e6f4ea" : "#fff3e0", color: type === "IN" ? "#1a7a38" : "#b45309" }),
-    actionBtn: (danger) => ({ fontSize: "11px", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", border: `1px solid ${danger ? "var(--danger)" : "var(--border-input)"}`, background: "transparent", color: danger ? "var(--danger)" : "var(--text-secondary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", transition: "all 0.15s" }),
-    empty:     { textAlign: "center", color: "var(--text-disabled)", padding: "48px 20px", fontSize: "13px", fontStyle: "italic" },
-    clearBtn:  { fontSize: "11px", padding: "5px 12px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
+    page:     { fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", background: "var(--bg-page)", minHeight: "100vh", padding: "20px" },
+    header:   { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" },
+    title:    { fontSize: "18px", fontWeight: "600", color: "var(--text-primary)" },
+    subtitle: { fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" },
+    statsRow: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "20px" },
+    stat:     { background: "var(--bg-card)", border: "0.5px solid var(--border-main)", borderRadius: "8px", padding: "14px", textAlign: "center" },
+    statNum:  (c) => ({ fontSize: "26px", fontWeight: "700", color: c || "var(--text-primary)" }),
+    statLbl:  { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" },
+    filters:  { display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" },
+    select:   { fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
+    dateInput:{ fontSize: "12px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "var(--bg-input)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", color: "var(--text-primary)" },
+    addBtn:   { fontSize: "12px", padding: "7px 16px", borderRadius: "7px", border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontWeight: "600", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", display: "flex", alignItems: "center", gap: "6px", transition: "opacity 0.15s" },
+    table:    { width: "100%", borderCollapse: "collapse", background: "var(--bg-card)", borderRadius: "8px", overflow: "hidden", border: "0.5px solid var(--border-main)" },
+    th:       { padding: "10px 14px", textAlign: "left", fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.6px", background: "var(--bg-hover)", borderBottom: "1px solid var(--border-main)" },
+    td:       { padding: "11px 14px", fontSize: "12px", color: "var(--text-primary)", borderBottom: "0.5px solid var(--border-light)", verticalAlign: "middle" },
+    typePill: (type) => ({ display: "inline-block", fontSize: "10px", fontWeight: "700", padding: "3px 9px", borderRadius: "10px", letterSpacing: "0.4px", background: type === "IN" ? "#e6f4ea" : "#fff3e0", color: type === "IN" ? "#1a7a38" : "#b45309" }),
+    actionBtn:(danger) => ({ fontSize: "11px", padding: "4px 10px", borderRadius: "5px", cursor: "pointer", border: `1px solid ${danger ? "var(--danger)" : "var(--border-input)"}`, background: "transparent", color: danger ? "var(--danger)" : "var(--text-secondary)", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)", transition: "all 0.15s" }),
+    empty:    { textAlign: "center", color: "var(--text-disabled)", padding: "48px 20px", fontSize: "13px", fontStyle: "italic" },
+    clearBtn: { fontSize: "11px", padding: "5px 12px", borderRadius: "6px", border: "1px solid var(--border-input)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)" },
   };
 
   return (
     <div style={S.page}>
 
+      {/* Modals */}
       {modal && (
         <RecordModal
-          mode={modal.mode} record={modal.record} projects={projects}
-          members={members || []} departments={departments}
-          teamId={userProfile.teamId} userProfile={userProfile}
-          onClose={() => setModal(null)} onSaved={() => {}}
+          mode={modal.mode}
+          record={modal.record}
+          projects={projects}
+          members={members || []}
+          departments={departments}
+          teamId={userProfile.teamId}
+          userProfile={userProfile}
+          onClose={() => setModal(null)}
+          onSaved={() => {}}
         />
       )}
       {deleteTarget && (
-        <DeleteConfirm record={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />
+        <DeleteConfirm
+          record={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+        />
       )}
 
+      {/* Header */}
       <div style={S.header}>
         <div>
           <div style={S.title}>Records</div>
           <div style={S.subtitle}>Logbook of all incoming and outgoing documents</div>
         </div>
-        <button style={S.addBtn} onClick={() => setModal({ mode: "create" })}
+        <button
+          style={S.addBtn}
+          onClick={() => setModal({ mode: "create" })}
           onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
-          onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+        >
           + New Record
         </button>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div style={S.statsRow}>
         <div style={S.stat}>
           <div style={S.statNum("var(--primary)")}>{records.length}</div>
@@ -517,66 +620,6 @@ export default function Records() {
         </div>
       </div>
 
-      {/* ── Archive Library Card ─────────────────────────────────────────────── */}
-      <div
-        onClick={() => navigate("/archive")}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "var(--bg-card)",
-          border: "1.5px solid var(--border-main)",
-          borderLeft: "4px solid #6b6b6b",
-          borderRadius: "8px",
-          padding: "14px 20px",
-          marginBottom: "20px",
-          cursor: "pointer",
-          transition: "box-shadow 0.15s, border-color 0.15s",
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.boxShadow = "var(--shadow-lg)";
-          e.currentTarget.style.borderColor = "#555";
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.boxShadow = "none";
-          e.currentTarget.style.borderLeftColor = "#6b6b6b";
-          e.currentTarget.style.borderColor = "var(--border-main)";
-          e.currentTarget.style.borderLeftColor = "#6b6b6b";
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <div style={{
-            width: "40px", height: "40px", borderRadius: "8px",
-            background: "#f0f0f0", display: "flex", alignItems: "center",
-            justifyContent: "center", fontSize: "20px", flexShrink: 0,
-          }}>
-            🗄️
-          </div>
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", letterSpacing: "0.2px" }}>
-              Archive Library
-            </div>
-            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
-              View all permanently archived documents
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {/* Archived count badge */}
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "22px", fontWeight: "700", color: "#6b6b6b", lineHeight: 1 }}>
-              {archivedCount}
-            </div>
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>
-              archived
-            </div>
-          </div>
-          {/* Arrow */}
-          <div style={{ fontSize: "16px", color: "var(--text-muted)" }}>›</div>
-        </div>
-      </div>
-
       {/* Filters */}
       <div style={S.filters}>
         <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
@@ -586,9 +629,19 @@ export default function Records() {
         </select>
         <select id="filter-project" name="filter-project" style={S.select} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
           <option value="All">All Projects</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>)}
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>
+          ))}
         </select>
-        <input id="filter-date" name="filter-date" type="date" style={S.dateInput} value={filterDate} onChange={e => setFilterDate(e.target.value)} title="Filter by date" />
+        <input
+          id="filter-date"
+          name="filter-date"
+          type="date"
+          style={S.dateInput}
+          value={filterDate}
+          onChange={e => setFilterDate(e.target.value)}
+          title="Filter by date"
+        />
         {hasFilters && (
           <button style={S.clearBtn} onClick={() => { setFilterType("All"); setFilterProject("All"); setFilterDate(""); }}>
             ✕ Clear filters
@@ -601,73 +654,89 @@ export default function Records() {
 
       {/* Table */}
       <div style={{ overflowX: "auto" }}>
-        {loading ? <div style={S.empty}>Loading records…</div> : (
-          <table style={S.table}>
-            <thead>
-              <tr>
-                <th style={S.th}>Date</th>
-                <th style={S.th}>Project</th>
-                <th style={S.th}>Type</th>
-                <th style={S.th}>From</th>
-                <th style={S.th}>To</th>
-                <th style={S.th}>Department</th>
-                <th style={S.th}>External Party</th>
-                <th style={S.th}>Docs</th>
-                <th style={S.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
+        {loading
+          ? <div style={S.empty}>Loading records…</div>
+          : (
+            <table style={S.table}>
+              <thead>
                 <tr>
-                  <td colSpan={9} style={{ ...S.td, ...S.empty }}>
-                    {records.length === 0 ? "No records yet. Click '+ New Record' to add the first one." : "No records match the current filters."}
-                  </td>
+                  <th style={S.th}>Date</th>
+                  <th style={S.th}>Project</th>
+                  <th style={S.th}>Type</th>
+                  <th style={S.th}>From</th>
+                  <th style={S.th}>To</th>
+                  <th style={S.th}>Department</th>
+                  <th style={S.th}>External Party</th>
+                  <th style={S.th}>Docs</th>
+                  <th style={S.th}>Actions</th>
                 </tr>
-              )}
-              {filtered.map(r => {
-                const deptValue   = r.from?.type === "department" ? r.from?.label : r.to?.type === "department" ? r.to?.label : "—";
-                const externalVal = r.from?.type === "contractor" ? r.from?.label : r.to?.type === "contractor" ? r.to?.label : "—";
-                const docCount    = r.documents?.length || 0;
-                return (
-                  <tr key={r.id}
-                    onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <td style={{ ...S.td, whiteSpace: "nowrap" }}>{formatDate(r.date)}</td>
-                    <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{projectLabel(r.projectId)}</td>
-                    <td style={S.td}><span style={S.typePill(r.type)}>{r.type === "IN" ? "▼ IN" : "▲ OUT"}</span></td>
-                    <td style={S.td}>{r.from?.label || "—"}</td>
-                    <td style={S.td}>{r.to?.label   || "—"}</td>
-                    <td style={S.td}>{deptValue}</td>
-                    <td style={S.td}>{externalVal}</td>
-                    <td style={{ ...S.td, textAlign: "center" }}>
-                      {docCount > 0
-                        ? <span style={{ fontSize: "11px", fontWeight: "600", background: "var(--bg-hover)", border: "1px solid var(--border-main)", borderRadius: "10px", padding: "2px 9px", color: "var(--text-primary)" }}>{docCount}</span>
-                        : <span style={{ color: "var(--text-muted)" }}>—</span>
-                      }
-                    </td>
-                    <td style={S.td}>
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        <button style={S.actionBtn(false)} onClick={() => setModal({ mode: "view", record: r })}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}>View</button>
-                        {adminUser && (
-                          <>
-                            <button style={S.actionBtn(false)} onClick={() => setModal({ mode: "edit", record: r })}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}>Edit</button>
-                            <button style={S.actionBtn(true)} onClick={() => setDeleteTarget(r)}
-                              onMouseEnter={e => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--danger)"; }}>Del</button>
-                          </>
-                        )}
-                      </div>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{ ...S.td, ...S.empty }}>
+                      {records.length === 0
+                        ? "No records yet. Click '+ New Record' to add the first one."
+                        : "No records match the current filters."}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+                )}
+                {filtered.map(r => {
+                  const deptValue   = r.from?.type === "department" ? r.from?.label : r.to?.type === "department" ? r.to?.label : "—";
+                  const externalVal = r.from?.type === "contractor" ? r.from?.label : r.to?.type === "contractor" ? r.to?.label : "—";
+                  const docCount    = r.documents?.length || 0;
+
+                  return (
+                    <tr key={r.id}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <td style={{ ...S.td, whiteSpace: "nowrap" }}>{formatDate(r.date)}</td>
+                      <td style={{ ...S.td, fontWeight: "600", color: "var(--primary)" }}>{projectLabel(r.projectId)}</td>
+                      <td style={S.td}><span style={S.typePill(r.type)}>{r.type === "IN" ? "▼ IN" : "▲ OUT"}</span></td>
+                      <td style={S.td}>{r.from?.label || "—"}</td>
+                      <td style={S.td}>{r.to?.label   || "—"}</td>
+                      <td style={S.td}>{deptValue}</td>
+                      <td style={S.td}>{externalVal}</td>
+                      <td style={{ ...S.td, textAlign: "center" }}>
+                        {docCount > 0
+                          ? <span style={{ fontSize: "11px", fontWeight: "600", background: "var(--bg-hover)", border: "1px solid var(--border-main)", borderRadius: "10px", padding: "2px 9px", color: "var(--text-primary)" }}>{docCount}</span>
+                          : <span style={{ color: "var(--text-muted)" }}>—</span>
+                        }
+                      </td>
+                      <td style={S.td}>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button
+                            style={S.actionBtn(false)}
+                            onClick={() => setModal({ mode: "view", record: r })}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                          >View</button>
+                          {adminUser && (
+                            <>
+                              <button
+                                style={S.actionBtn(false)}
+                                onClick={() => setModal({ mode: "edit", record: r })}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--primary)"; e.currentTarget.style.color = "var(--primary)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-input)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                              >Edit</button>
+                              <button
+                                style={S.actionBtn(true)}
+                                onClick={() => setDeleteTarget(r)}
+                                onMouseEnter={e => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--danger)"; }}
+                              >Del</button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )
+        }
       </div>
     </div>
   );

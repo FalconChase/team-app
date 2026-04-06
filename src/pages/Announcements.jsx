@@ -4,6 +4,8 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebas
 import { db, storage } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTeam } from "../contexts/TeamContext";
+// ── AUDIT LOG ──────────────────────────────────────────────────────────────────
+import { logAction } from "../utils/logAction";
 
 function linkify(text) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -76,6 +78,10 @@ export default function Announcements() {
       }
       setUploading(false); setUploadProgress(0);
     }
+
+    // Capture a short preview for the log (first 60 chars of text)
+    const preview = text.trim().slice(0, 60) || (attachment ? `[attachment: ${attachment.name}]` : "");
+
     await addDoc(collection(db, "announcements"), {
       text: text.trim(), teamId: userProfile.teamId,
       authorId: userProfile.uid, authorName: userProfile.displayName,
@@ -83,6 +89,15 @@ export default function Announcements() {
       attachment: attachment || null,
       createdAt: serverTimestamp()
     });
+
+    // ── LOG: announcement posted ─────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Posted an announcement: "${preview}${preview.length >= 60 ? "…" : ""}"`,
+      category:    "announcement",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+    });
+
     setText(""); setFile(null);
     const fi = document.getElementById("ann-file-input");
     if (fi) fi.value = "";
@@ -95,10 +110,23 @@ export default function Announcements() {
 
   async function remove(id, attachment) {
     if (!window.confirm("Remove this announcement?")) return;
+
+    // Capture post details before deletion for the log
+    const target = posts.find(p => p.id === id);
+    const preview = target?.text?.slice(0, 60) || "[no text]";
+
     if (attachment?.path) {
       try { await deleteObject(ref(storage, attachment.path)); } catch (e) {}
     }
     await deleteDoc(doc(db, "announcements", id));
+
+    // ── LOG: announcement deleted ────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Deleted announcement: "${preview}${preview.length >= 60 ? "…" : ""}"`,
+      category:    "announcement",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+    });
   }
 
   const roleColor = { admin: "#f0a500", manager: "#f0a500", supervisor: "#7ab3e0", member: "#a0b8c8" };

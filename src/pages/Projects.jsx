@@ -250,11 +250,17 @@ export default function Projects() {
     }
   }
 
-  async function handleDeleteCTE(p, index) {
+async function handleDeleteCTE(p, index) {
+    const cte = p.ctes[index];
     const newCtes = p.ctes.filter((_, i) => i !== index);
     try {
       await updateDoc(doc(db, "teams", teamId, "projects", p.docId), { ctes: newCtes });
       setProjects((prev) => prev.map((pr) => pr.docId === p.docId ? { ...pr, ctes: newCtes } : pr));
+      if (cte.fromDocId) {
+        await updateDoc(doc(db, "teams", teamId, "papers", cte.fromDocId), {
+          "statusDetails.CTE_VARS.postedToProject": false,
+        });
+      }
     } catch (err) { console.error("Failed to delete CTE:", err); }
   }
 

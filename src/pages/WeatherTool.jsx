@@ -9,6 +9,9 @@ import { WeatherLogsModal } from '../components/weather/WeatherLogsModal';
 import { DAYS_IN_MONTH, HOURS_IN_DAY, INITIAL_CONTRACT_INFO } from '../constants/weatherConstants';
 import { generateRangeData } from '../utils/weatherLogic';
 import '../styles/weather-tool.css';
+import { useAuth } from '../contexts/AuthContext';   // ← added for audit logging
+import { useTeam } from '../contexts/TeamContext';   // ← added for audit logging
+import { logAction } from '../utils/logAction';      // ← added for audit logging
 
 const TABS = [
   { id: 'input',           label: 'Inputs' },
@@ -25,6 +28,10 @@ function makeEmptyGrid() {
 }
 
 export default function WeatherTool() {
+  // ── Auth context (for audit logging) ────────────────────────────────────────
+  const { userProfile } = useAuth();
+  const { team }        = useTeam();
+
   const [activeTab, setActiveTab]               = useState('input');
   const [contractInfo, setContractInfo]         = useState(INITIAL_CONTRACT_INFO);
   const [isAutoGenerateOpen, setAutoGenOpen]    = useState(false);
@@ -42,11 +49,29 @@ export default function WeatherTool() {
 
   const handleAutoGenerate = (startDay, endDay, unworkableCount) => {
     setWeatherData(prev => generateRangeData(startDay, endDay, unworkableCount, prev));
+
+    // ── Audit log ────────────────────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile?.teamId || team?.id,
+      action:      `Auto-generated weather data (Days ${startDay}–${endDay}, ${unworkableCount} unworkable hours)`,
+      category:    "weather",
+      performedBy: userProfile?.displayName || userProfile?.email || "Unknown",
+      targetName:  contractInfo?.projectName || null,
+    });
   };
 
   const handleClear = () => {
     if (window.confirm('Are you sure you want to clear all weather data? This cannot be undone.')) {
       setWeatherData(makeEmptyGrid());
+
+      // ── Audit log ──────────────────────────────────────────────────────────
+      logAction({
+        teamId:      userProfile?.teamId || team?.id,
+        action:      "Cleared all weather data",
+        category:    "weather",
+        performedBy: userProfile?.displayName || userProfile?.email || "Unknown",
+        targetName:  contractInfo?.projectName || null,
+      });
     }
   };
 

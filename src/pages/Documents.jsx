@@ -9,6 +9,7 @@ import {
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTeam } from "../contexts/TeamContext";
+import { logAction } from "../utils/logAction"; // ── Patch 1: audit log utility ──
 
 // ─── Default Status List ───────────────────────────────────────────────────────
 export const DEFAULT_STATUSES = [
@@ -814,6 +815,15 @@ export default function Documents() {
       lastModifiedBy: userProfile.displayName || userProfile.email || "Unknown",
       activityLog: [{ text: `Document created by ${userProfile.displayName}`, by: userProfile.displayName, at: new Date().toISOString() }],
     });
+    // ── Audit log ──────────────────────────────────────────────────────────
+    const subject2 = composeLabel(form.subjectType, form.subjectNum, form.rpdmRef);
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Added document: ${subject2}`,
+      category:    "document",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  subject2,
+    });
     setShowForm(false);
     setForm(BLANK_FORM);
   }
@@ -912,6 +922,14 @@ export default function Documents() {
       ...modifierFields(),
       activityLog: arrayUnion({ text: `Status updated to "${newStatus}"`, by: userProfile.displayName, at: new Date().toISOString() }),
     });
+    // ── Audit log ────────────────────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Changed document status to "${newStatus}"`,
+      category:    "document",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  d?.subject || docId,
+    });
   }
 
   async function handleSaveDetails(docId, statusLabel, details) {
@@ -983,17 +1001,40 @@ export default function Documents() {
   }
 
   async function handleAssignMember(docId, uid) {
+    const assignee = uid ? members.find((m) => (m.uid || m.id) === uid)?.displayName || uid : null;
     await updateDoc(doc(db, "papers", docId), {
       assignedTo: uid || null,
       ...modifierFields(),
-      activityLog: arrayUnion({ text: uid ? `Assigned to ${members.find((m) => (m.uid || m.id) === uid)?.displayName || uid}` : "Unassigned", by: userProfile.displayName, at: new Date().toISOString() }),
+      activityLog: arrayUnion({ text: assignee ? `Assigned to ${assignee}` : "Unassigned", by: userProfile.displayName, at: new Date().toISOString() }),
+    });
+
+    // ── Audit log ────────────────────────────────────────────────────────────
+    const d = documents.find(doc => doc.id === docId);
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      assignee ? `Assigned document to ${assignee}` : "Unassigned document",
+      category:    "document",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  d?.subject || docId,
     });
   }
 
   async function handleDelete(id) {
     if (!window.confirm("Delete this document? This cannot be undone.")) return;
+
+    // ── Capture subject before deletion ──────────────────────────────────────
+    const d = documents.find(doc => doc.id === id);
     await deleteDoc(doc(db, "papers", id));
     setExpanded((prev) => { const n = { ...prev }; delete n[id]; return n; });
+
+    // ── Audit log ────────────────────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Deleted document: ${d?.subject || id}`,
+      category:    "document",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  d?.subject || null,
+    });
   }
 
   const filtered = documents.filter(

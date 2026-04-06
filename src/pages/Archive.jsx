@@ -7,6 +7,7 @@ import {
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTeam } from "../contexts/TeamContext";
+import { logAction } from "../utils/logAction";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(val) {
@@ -221,6 +222,15 @@ export default function Archive() {
     });
     setSavingDate(prev => ({ ...prev, [d.id]: false }));
     setEditDates(prev => { const n = { ...prev }; delete n[d.id]; return n; });
+
+    // ── Audit log ────────────────────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Edited archive date for "${d.subject || d.id}" to ${newDate}`,
+      category:    "record",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  d.subject || null,
+    });
   }
 
   function handleRestoreSuccess() {

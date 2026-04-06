@@ -410,7 +410,7 @@ function TeamProfileSection({ team, updateTeamSettings }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 2 — Member Management
 // ═══════════════════════════════════════════════════════════════════════════════
-function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin, removeMember }) {
+function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin, removeMember, userProfile, teamId }) { // MODIFIED: added userProfile, teamId for logging
   const [confirmAction, setConfirmAction] = useState(null); // { type, member }
 
   async function executeAction() {
@@ -418,6 +418,9 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
     if (type === "promote")  await grantAdmin(member.id);
     if (type === "demote")   await revokeAdmin(member.id);
     if (type === "remove")   await removeMember(member.id);
+    // ADDED: log the member action
+    const actionText = { promote: `Promoted ${member.displayName} to Admin`, demote: `Demoted ${member.displayName} to Member`, remove: `Removed member ${member.displayName} from team` }[type];
+    logAction({ teamId, action: actionText, category: "member", performedBy: userProfile?.displayName || userProfile?.email || "Unknown", targetName: member.displayName || null });
     setConfirmAction(null);
   }
 
@@ -1051,6 +1054,8 @@ export function Settings() {
         grantAdmin={grantAdmin}
         revokeAdmin={revokeAdmin}
         removeMember={removeMember}
+        userProfile={userProfile}
+        teamId={userProfile?.teamId}
       />
 
       <StatusListSection

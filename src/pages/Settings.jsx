@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
-import { doc, updateDoc, collection, query, where, onSnapshot, getDoc, setDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, onSnapshot, getDoc, setDoc, orderBy, limit } from "firebase/firestore"; // MODIFIED: added orderBy, limit for TeamLogSection
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTeam } from "../contexts/TeamContext";
 import { DEFAULT_STATUSES } from "./Documents";
+import { logAction } from "../utils/logAction"; // ADDED: team log utility
 
 // ─── Default subject types (mirrors Documents.jsx) ───────────────────────────
 const DEFAULT_SUBJECT_TYPES = [
   "AS-STAKED PLAN", "V.O.", "CTE", "W.S.O.",
   "W.R.O.", "RPDM", "REVISED PLAN", "AS BUILT PLAN",
-  "CERTIFICATE OF COMPLETION", "CERTIFICATE OF ACCEPTANCE",
 ];
 
 // ─── Default thresholds (mirrors Dashboard.jsx hardcoded values) ─────────────
@@ -27,6 +27,13 @@ const THEMES = [
   { id: "monochrome", name: "Monochrome", emoji: "⚫", desc: "Ultra minimal grayscale" },
   { id: "arcade",     name: "Arcade",     emoji: "🎮", desc: "Gamified playful vibes" },
 ];
+
+// ─── Category config for Team Log ────────────────────────────────────────────  ADDED
+const CATEGORY_META = {
+  member:   { label: "Member",   color: "#2563eb", bg: "#eff6ff" },
+  settings: { label: "Settings", color: "#7c3aed", bg: "#f5f3ff" },
+  team:     { label: "Team",     color: "#059669", bg: "#ecfdf5" },
+};
 
 // ─── Shared style helpers ─────────────────────────────────────────────────────
 const S = {
@@ -173,9 +180,9 @@ function ConfirmBanner({ message, onConfirm, onCancel }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 0 — Theme Control
+// SECTION 0 — Theme Control (NEW)
 // ═══════════════════════════════════════════════════════════════════════════════
-function ThemeControlSection({ teamId }) {
+function ThemeControlSection({ teamId, userProfile }) { // MODIFIED: added userProfile prop for logging
   const [currentTheme, setCurrentTheme] = useState("default");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -196,13 +203,26 @@ function ThemeControlSection({ teamId }) {
   async function handleThemeChange(themeId) {
     setSaving(true);
     try {
+      // Save to Firestore
       await setDoc(
         doc(db, "appSettings", teamId),
         { theme: themeId, updatedAt: new Date().toISOString() },
         { merge: true }
       );
+      
+      // Apply immediately
       setCurrentTheme(themeId);
       document.documentElement.setAttribute("data-theme", themeId);
+
+      // ADDED: log the theme change
+      const themeName = THEMES.find((t) => t.id === themeId)?.name || themeId;
+      await logAction({
+        teamId,
+        action: `Theme changed to ${themeName}`,
+        category: "settings",
+        performedBy: userProfile?.displayName || userProfile?.email,
+      });
+      
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -242,23 +262,51 @@ function ThemeControlSection({ teamId }) {
             <span style={{ fontSize: "28px", lineHeight: 1 }}>{theme.emoji}</span>
             <div style={{ flex: 1 }}>
               <div style={{
-                fontSize: "13px", fontWeight: "700",
+                fontSize: "13px",
+                fontWeight: "700",
                 color: currentTheme === theme.id ? "var(--primary)" : "var(--text-primary)",
                 marginBottom: "2px",
               }}>
                 {theme.name}
               </div>
-              <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>{theme.desc}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
+                {theme.desc}
+              </div>
             </div>
             {currentTheme === theme.id && (
-              <span style={{ fontSize: "14px", color: "var(--primary)", fontWeight: "700" }}>✓</span>
+              <span style={{
+                fontSize: "14px",
+                color: "var(--primary)",
+                fontWeight: "700",
+              }}>✓</span>
             )}
           </div>
         ))}
       </div>
 
-      {saved  && <div style={{ fontSize: "11px", color: "var(--success)", background: "var(--success-bg)", padding: "8px 12px", borderRadius: "6px", textAlign: "center" }}>✓ Theme applied successfully</div>}
-      {saving && <div style={{ fontSize: "11px", color: "var(--text-secondary)", textAlign: "center", fontStyle: "italic" }}>Applying theme...</div>}
+      {saved && (
+        <div style={{
+          fontSize: "11px",
+          color: "var(--success)",
+          background: "var(--success-bg)",
+          padding: "8px 12px",
+          borderRadius: "6px",
+          textAlign: "center",
+        }}>
+          ✓ Theme applied successfully
+        </div>
+      )}
+
+      {saving && (
+        <div style={{
+          fontSize: "11px",
+          color: "var(--text-secondary)",
+          textAlign: "center",
+          fontStyle: "italic",
+        }}>
+          Applying theme...
+        </div>
+      )}
     </div>
   );
 }
@@ -281,7 +329,7 @@ function TeamProfileSection({ team, updateTeamSettings }) {
 
   async function handleSave() {
     setSaving(true);
-    await updateTeamSettings({ name: name.trim(), department: dept.trim() });
+    await updateTeamSettings({ name: name.trim(), department: dept.trim() }, "Team profile updated"); // MODIFIED: added log message
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -289,7 +337,7 @@ function TeamProfileSection({ team, updateTeamSettings }) {
 
   async function handleRegenInvite() {
     const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-    await updateTeamSettings({ inviteCode: newCode });
+    await updateTeamSettings({ inviteCode: newCode }, "Invite code regenerated"); // MODIFIED: added log message
     setConfirmRegen(false);
     setRegenDone(true);
     setTimeout(() => setRegenDone(false), 3000);
@@ -336,7 +384,9 @@ function TeamProfileSection({ team, updateTeamSettings }) {
             Share this code with new members to join your team.
           </div>
         </div>
-        <button style={S.btn(false, false, true)} onClick={() => setConfirmRegen(true)}>Regenerate</button>
+        <button style={S.btn(false, false, true)} onClick={() => setConfirmRegen(true)}>
+          Regenerate
+        </button>
       </div>
 
       {confirmRegen && (
@@ -361,7 +411,7 @@ function TeamProfileSection({ team, updateTeamSettings }) {
 // SECTION 2 — Member Management
 // ═══════════════════════════════════════════════════════════════════════════════
 function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin, removeMember }) {
-  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null); // { type, member }
 
   async function executeAction() {
     const { type, member } = confirmAction;
@@ -383,8 +433,8 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
       <div style={S.sDesc}>Manage roles and access for all active team members.</div>
 
       {members.map((m) => {
-        const isSelf = m.uid === currentUser?.uid || m.id === currentUser?.uid;
-        const isAdm  = m.role === "admin" || m.role === "manager" || m.role === "supervisor";
+        const isSelf  = m.uid === currentUser?.uid || m.id === currentUser?.uid;
+        const isAdm   = m.role === "admin" || m.role === "manager" || m.role === "supervisor";
 
         return (
           <div key={m.id || m.uid} style={S.memberRow}>
@@ -436,7 +486,7 @@ function StatusListSection({ statuses, onSave, papers }) {
   const [newItem, setNewItem] = useState("");
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
-  const [confirm, setConfirm] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { index, label, affectedCount, nearestLabel }
 
   useEffect(() => { setList([...statuses]); }, [JSON.stringify(statuses)]);
 
@@ -456,24 +506,38 @@ function StatusListSection({ statuses, onSave, papers }) {
   }
 
   function requestDelete(index) {
-    const label      = list[index];
-    const affected   = (papers || []).filter((p) => p.status === label);
-    const nearestIdx = index > 0 ? index - 1 : index + 1;
+    const label        = list[index];
+    const affected     = (papers || []).filter((p) => p.status === label);
+    const nearestIdx   = index > 0 ? index - 1 : index + 1;
     const nearestLabel = list[nearestIdx] || null;
 
     if (affected.length === 0) {
+      // No documents affected — delete immediately
       setList((l) => l.filter((_, i) => i !== index));
       return;
     }
-    setConfirm({ index, label, affectedCount: affected.length, nearestLabel });
+
+    setConfirm({
+      index,
+      label,
+      affectedCount: affected.length,
+      nearestLabel,
+    });
   }
 
   async function executeDelete() {
     const { index, label, nearestLabel } = confirm;
+
+    // Move affected documents to nearest status first
     if (nearestLabel) {
       const affected = (papers || []).filter((p) => p.status === label);
-      await Promise.all(affected.map((p) => updateDoc(doc(db, "papers", p.id), { status: nearestLabel })));
+      await Promise.all(
+        affected.map((p) =>
+          updateDoc(doc(db, "papers", p.id), { status: nearestLabel })
+        )
+      );
     }
+
     setList((l) => l.filter((_, i) => i !== index));
     setConfirm(null);
   }
@@ -497,15 +561,20 @@ function StatusListSection({ statuses, onSave, papers }) {
         <div key={st} style={S.statusRow}>
           <span style={S.stageNum}>{i + 1}/{list.length}</span>
           <span style={{ flex: 1, fontSize: "12px", fontWeight: "500", color: "var(--text-primary)" }}>{st}</span>
-          <button style={S.iconBtn()} onClick={() => move(i, -1)} disabled={i === 0} title="Move up">↑</button>
-          <button style={S.iconBtn()} onClick={() => move(i, 1)} disabled={i === list.length - 1} title="Move down">↓</button>
+          <button style={S.iconBtn()} onClick={() => move(i, -1)} disabled={i === 0}
+            title="Move up">↑</button>
+          <button style={S.iconBtn()} onClick={() => move(i, 1)} disabled={i === list.length - 1}
+            title="Move down">↓</button>
           <button style={S.iconBtn(true)} onClick={() => requestDelete(i)} title="Delete">✕</button>
         </div>
       ))}
 
+      {/* Add new status */}
       <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
         <input
-          style={{ ...S.input, flex: 1 }} value={newItem} placeholder="New status name…"
+          style={{ ...S.input, flex: 1 }}
+          value={newItem}
+          placeholder="New status name…"
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addStatus(); }}
         />
@@ -538,7 +607,7 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
   const [newItem, setNewItem] = useState("");
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
-  const [blocked, setBlocked] = useState(null);
+  const [blocked, setBlocked] = useState(null); // label of blocked delete
 
   useEffect(() => { setList([...subjectTypes]); }, [JSON.stringify(subjectTypes)]);
 
@@ -550,8 +619,8 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
   }
 
   function requestDelete(index) {
-    const label = list[index];
-    const inUse = (papers || []).some((p) => p.subjectType === label);
+    const label    = list[index];
+    const inUse    = (papers || []).some((p) => p.subjectType === label);
     if (inUse) {
       setBlocked(label);
       setTimeout(() => setBlocked(null), 3000);
@@ -605,7 +674,9 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
 
       <div style={{ display: "flex", gap: "8px" }}>
         <input
-          style={{ ...S.input, flex: 1 }} value={newItem} placeholder="New subject type…"
+          style={{ ...S.input, flex: 1 }}
+          value={newItem}
+          placeholder="New subject type…"
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addType(); }}
         />
@@ -623,224 +694,12 @@ function SubjectTypesSection({ subjectTypes, onSave, papers }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 4B — Subject Stage Visibility Config
-// ═══════════════════════════════════════════════════════════════════════════════
-function SubjectStageConfigSection({ subjectTypes, statuses, config, onSave }) {
-  const [draft,    setDraft]    = useState(config || {});
-  const [expanded, setExpanded] = useState(null);
-  const [saving,   setSaving]   = useState(false);
-  const [saved,    setSaved]    = useState(false);
-
-  useEffect(() => { setDraft(config || {}); }, [JSON.stringify(config)]);
-
-  function getVisible(type) {
-    return draft[type]?.visibleStatuses ?? [...statuses];
-  }
-
-  function toggleStatus(type, status) {
-    const current = getVisible(type);
-    const next    = current.includes(status)
-      ? current.filter((s) => s !== status)
-      : [...current, status];
-    const ordered = statuses.filter((s) => next.includes(s));
-    if (ordered.length === statuses.length) {
-      setDraft((prev) => { const u = { ...prev }; delete u[type]; return u; });
-    } else {
-      setDraft((prev) => ({ ...prev, [type]: { visibleStatuses: ordered } }));
-    }
-  }
-
-  function resetType(type) {
-    setDraft((prev) => { const u = { ...prev }; delete u[type]; return u; });
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    await onSave(draft);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  const hasConfig = (type) => !!draft[type]?.visibleStatuses;
-
-  return (
-    <div style={S.section}>
-      <div style={S.sTitle}>Subject Stage Visibility</div>
-      <div style={S.sDesc}>
-        Control which stages are visible per subject type. Types with no custom config show all stages.
-        Toggle off the stages that don't apply to a specific subject type.
-      </div>
-
-      {subjectTypes.map((type) => {
-        const isOpen    = expanded === type;
-        const visible   = getVisible(type);
-        const isCustom  = hasConfig(type);
-        const hiddenCnt = statuses.length - visible.length;
-
-        return (
-          <div key={type} style={{
-            border: "0.5px solid var(--border-main)", borderRadius: "8px", marginBottom: "8px",
-            overflow: "hidden", background: isOpen ? "var(--bg-secondary)" : "var(--bg-hover)",
-          }}>
-            <div
-              onClick={() => setExpanded(isOpen ? null : type)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", cursor: "pointer" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)" }}>{type}</span>
-                {isCustom && hiddenCnt > 0 && (
-                  <span style={{ fontSize: "10px", padding: "1px 7px", borderRadius: "8px", background: "var(--warning-bg)", color: "var(--warning)", fontWeight: "600", border: "1px solid var(--warning)" }}>
-                    {hiddenCnt} hidden
-                  </span>
-                )}
-                {!isCustom && (
-                  <span style={{ fontSize: "10px", padding: "1px 7px", borderRadius: "8px", background: "var(--bg-secondary)", color: "var(--text-disabled)", fontWeight: "500", border: "0.5px solid var(--border-light)" }}>
-                    all stages
-                  </span>
-                )}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {isCustom && (
-                  <button
-                    style={{ ...S.btn(false, false, true), fontSize: "10px", padding: "2px 8px" }}
-                    onClick={(e) => { e.stopPropagation(); resetType(type); }}
-                  >Reset</button>
-                )}
-                <span style={{ fontSize: "11px", color: "var(--text-secondary)", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", display: "inline-block", transition: "transform 0.15s" }}>▾</span>
-              </div>
-            </div>
-
-            {isOpen && (
-              <div style={{ borderTop: "0.5px solid var(--border-light)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px", fontStyle: "italic" }}>
-                  Toggle off stages that don't apply to <strong>{type}</strong>.
-                </div>
-                {statuses.map((status, idx) => {
-                  const isVisible = visible.includes(status);
-                  return (
-                    <div key={status} style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "7px 10px", borderRadius: "6px",
-                      background: isVisible ? "var(--bg-card)" : "var(--bg-page)",
-                      border: `0.5px solid ${isVisible ? "var(--border-main)" : "var(--border-light)"}`,
-                      opacity: isVisible ? 1 : 0.5,
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={S.stageNum}>{idx + 1}</span>
-                        <span style={{ fontSize: "12px", fontWeight: "500", color: isVisible ? "var(--text-primary)" : "var(--text-disabled)", textDecoration: isVisible ? "none" : "line-through" }}>
-                          {status}
-                        </span>
-                      </div>
-                      <Toggle value={isVisible} onChange={() => toggleStatus(type, status)} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      <div style={S.saveBar}>
-        {saved && <span style={{ fontSize: "11px", color: "var(--success)", alignSelf: "center" }}>✓ Saved</span>}
-        <button style={S.btn(true)} onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save Stage Config"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 5 — Archive Authorization Code
-// Stores archiveAuthCode in the team Firestore doc.
-// Default is "ARC123" if never set.
-// Required to restore any document from the Archive Library.
-// Simulates interdepartmental authorization from the Archive department.
-// ═══════════════════════════════════════════════════════════════════════════════
-function ArchiveAuthSection({ team, updateTeamSettings }) {
-  const [code,   setCode]   = useState(team?.archiveAuthCode || "ARC123");
-  const [show,   setShow]   = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
-
-  useEffect(() => {
-    setCode(team?.archiveAuthCode || "ARC123");
-  }, [team?.archiveAuthCode]);
-
-  async function handleSave() {
-    const trimmed = code.trim().toUpperCase();
-    if (!trimmed || trimmed.length < 4) {
-      alert("Authorization code must be at least 4 characters.");
-      return;
-    }
-    setSaving(true);
-    await updateTeamSettings({ archiveAuthCode: trimmed });
-    setCode(trimmed);
-    setSaving(false);
-    setSaved(true);
-    setShow(false);
-    setTimeout(() => setSaved(false), 2500);
-  }
-
-  return (
-    <div style={S.section}>
-      <div style={S.sTitle}>🔐 Archive Authorization Code</div>
-      <div style={S.sDesc}>
-        This code is required to restore any document from the Archive Library.
-        It simulates authorization from the Archive department — share it only
-        with authorized personnel. Default is <strong>ARC123</strong> until changed.
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
-        <div style={{
-          fontFamily: "monospace", fontSize: "20px", fontWeight: "700",
-          letterSpacing: "4px", color: "var(--primary)", background: "var(--bg-secondary)",
-          padding: "8px 18px", borderRadius: "8px", border: "1px solid var(--border-main)",
-          minWidth: "120px", textAlign: "center",
-        }}>
-          {show ? (team?.archiveAuthCode || "ARC123") : "••••••"}
-        </div>
-        <button style={S.btn(false, false, true)} onClick={() => setShow(v => !v)}>
-          {show ? "Hide" : "Reveal"}
-        </button>
-      </div>
-
-      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
-        <div style={{ flex: 1 }}>
-          <label style={S.label}>New Authorization Code</label>
-          <input
-            style={{ ...S.input, fontFamily: "monospace", letterSpacing: "2px", textTransform: "uppercase" }}
-            value={code}
-            maxLength={20}
-            placeholder="e.g. ARC123"
-            onChange={(e) => { setCode(e.target.value.toUpperCase()); setSaved(false); }}
-          />
-        </div>
-        <button style={S.btn(true)} onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Update Code"}
-        </button>
-      </div>
-
-      {saved && (
-        <div style={{ fontSize: "11px", color: "var(--success)", background: "var(--success-bg)", padding: "8px 12px", borderRadius: "6px", marginTop: "10px" }}>
-          ✓ Authorization code updated successfully.
-        </div>
-      )}
-
-      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "12px", fontStyle: "italic" }}>
-        Minimum 4 characters. Letters and numbers only recommended. Case-insensitive when entered during restore.
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 6 — Dashboard Color Thresholds
+// SECTION 5 — Dashboard Color Thresholds
 // ═══════════════════════════════════════════════════════════════════════════════
 function ThresholdsSection({ thresholds, onSave }) {
-  const [rows,   setRows]   = useState(thresholds?.length ? [...thresholds] : [...DEFAULT_THRESHOLDS]);
+  const [rows,   setRows]   = useState(
+    thresholds?.length ? [...thresholds] : [...DEFAULT_THRESHOLDS]
+  );
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
 
@@ -853,13 +712,17 @@ function ThresholdsSection({ thresholds, onSave }) {
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { id: `t_${Date.now()}`, days: 0, color: "#888888", label: "Custom" }]);
+    setRows((prev) => [
+      ...prev,
+      { id: `t_${Date.now()}`, days: 0, color: "#888888", label: "Custom" },
+    ]);
   }
 
   function deleteRow(id) {
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
+  // Always sort ascending by days before saving
   async function handleSave() {
     setSaving(true);
     const sorted = [...rows].sort((a, b) => Number(a.days) - Number(b.days));
@@ -878,6 +741,7 @@ function ThresholdsSection({ thresholds, onSave }) {
         Rows are auto-sorted by days. Add as many levels as needed.
       </div>
 
+      {/* Column headers */}
       <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 1fr auto", gap: "8px", marginBottom: "6px" }}>
         {["Days ≥", "Color", "Label", ""].map((h) => (
           <div key={h} style={{ fontSize: "10px", color: "var(--text-secondary)", fontWeight: "600", textTransform: "uppercase" }}>{h}</div>
@@ -886,21 +750,42 @@ function ThresholdsSection({ thresholds, onSave }) {
 
       {rows.map((r) => (
         <div key={r.id} style={S.thresholdRow}>
-          <input type="number" min="1" style={{ ...S.input, textAlign: "center" }}
-            value={r.days} onChange={(e) => updateRow(r.id, "days", e.target.value)} />
+          {/* Days */}
+          <input
+            type="number" min="1"
+            style={{ ...S.input, textAlign: "center" }}
+            value={r.days}
+            onChange={(e) => updateRow(r.id, "days", e.target.value)}
+          />
+          {/* Color picker + hex preview */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <input type="color" value={r.color} onChange={(e) => updateRow(r.id, "color", e.target.value)}
-              style={{ width: "36px", height: "32px", borderRadius: "5px", border: "1px solid var(--border-input)", cursor: "pointer", padding: "2px" }} />
-            <span style={{ fontSize: "11px", color: r.color, fontWeight: "700", fontFamily: "monospace" }}>{r.color}</span>
+            <input
+              type="color"
+              value={r.color}
+              onChange={(e) => updateRow(r.id, "color", e.target.value)}
+              style={{ width: "36px", height: "32px", borderRadius: "5px", border: "1px solid var(--border-input)", cursor: "pointer", padding: "2px" }}
+            />
+            <span style={{ fontSize: "11px", color: r.color, fontWeight: "700", fontFamily: "monospace" }}>
+              {r.color}
+            </span>
+            {/* Live preview */}
             <span style={{ fontSize: "12px", fontWeight: "700", color: r.color }}>25N00247</span>
           </div>
-          <input style={S.input} value={r.label} placeholder="e.g. At Risk"
-            onChange={(e) => updateRow(r.id, "label", e.target.value)} />
+          {/* Label */}
+          <input
+            style={S.input}
+            value={r.label}
+            placeholder="e.g. At Risk"
+            onChange={(e) => updateRow(r.id, "label", e.target.value)}
+          />
+          {/* Delete */}
           <button style={S.iconBtn(true)} onClick={() => deleteRow(r.id)}>✕</button>
         </div>
       ))}
 
-      <button style={{ ...S.btn(false, false, true), marginTop: "6px" }} onClick={addRow}>+ Add Threshold</button>
+      <button style={{ ...S.btn(false, false, true), marginTop: "6px" }} onClick={addRow}>
+        + Add Threshold
+      </button>
 
       <div style={S.saveBar}>
         {saved && <span style={{ fontSize: "11px", color: "var(--success)", alignSelf: "center" }}>✓ Saved</span>}
@@ -913,20 +798,20 @@ function ThresholdsSection({ thresholds, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 7 — Notification Preferences
+// SECTION 6 — Notification Preferences
 // ═══════════════════════════════════════════════════════════════════════════════
 function NotificationsSection({ prefs, onSave }) {
-  const [onLacking,    setOnLacking]    = useState(prefs?.onLacking    ?? true);
-  const [stagnantDays, setStagnantDays] = useState(prefs?.stagnantDays ?? 15);
-  const [onApproved,   setOnApproved]   = useState(prefs?.onApproved   ?? false);
-  const [saving,       setSaving]       = useState(false);
-  const [saved,        setSaved]        = useState(false);
+  const [onLacking,     setOnLacking]     = useState(prefs?.onLacking     ?? true);
+  const [stagnantDays,  setStagnantDays]  = useState(prefs?.stagnantDays  ?? 15);
+  const [onApproved,    setOnApproved]    = useState(prefs?.onApproved     ?? false);
+  const [saving,        setSaving]        = useState(false);
+  const [saved,         setSaved]         = useState(false);
 
   useEffect(() => {
     if (prefs) {
-      setOnLacking(prefs.onLacking       ?? true);
+      setOnLacking(prefs.onLacking    ?? true);
       setStagnantDays(prefs.stagnantDays ?? 15);
-      setOnApproved(prefs.onApproved     ?? false);
+      setOnApproved(prefs.onApproved  ?? false);
     }
   }, [JSON.stringify(prefs)]);
 
@@ -956,20 +841,35 @@ function NotificationsSection({ prefs, onSave }) {
         Configure when alerts appear in the app. Push notifications can be wired up in a future update.
       </div>
 
-      <TRow label="Notify on LACKING status" desc="Show an alert when a document is marked as LACKING."
-        value={onLacking} onChange={setOnLacking} />
+      <TRow
+        label="Notify on LACKING status"
+        desc="Show an alert when a document is marked as LACKING."
+        value={onLacking}
+        onChange={setOnLacking}
+      />
 
-      <TRow label="Notify on APPROVED status" desc="Show an alert when a document reaches APPROVED."
-        value={onApproved} onChange={setOnApproved} />
+      <TRow
+        label="Notify on APPROVED status"
+        desc="Show an alert when a document reaches APPROVED."
+        value={onApproved}
+        onChange={setOnApproved}
+      />
 
-      <TRow label="Notify when document is stagnant" desc=""
-        value={stagnantDays > 0} onChange={(v) => setStagnantDays(v ? 15 : 0)}>
+      <TRow
+        label="Notify when document is stagnant"
+        desc=""
+        value={stagnantDays > 0}
+        onChange={(v) => setStagnantDays(v ? 15 : 0)}
+      >
         {stagnantDays > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>After</span>
-            <input type="number" min="1" max="90" value={stagnantDays}
+            <input
+              type="number" min="1" max="90"
+              value={stagnantDays}
               onChange={(e) => setStagnantDays(e.target.value)}
-              style={{ ...S.input, width: "60px", textAlign: "center" }} />
+              style={{ ...S.input, width: "60px", textAlign: "center" }}
+            />
             <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>days without a status change.</span>
           </div>
         )}
@@ -986,25 +886,129 @@ function NotificationsSection({ prefs, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 7 — Team Log (NEW)
+// ═══════════════════════════════════════════════════════════════════════════════
+function TeamLogSection({ teamId }) {
+  const [logs,    setLogs]    = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!teamId) return;
+    const q = query(
+      collection(db, "teamLogs"),
+      where("teamId", "==", teamId),
+      orderBy("timestamp", "desc"),
+      limit(150)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [teamId]);
+
+  function formatTime(ts) {
+    if (!ts?.toDate) return "—";
+    const d = ts.toDate();
+    return d.toLocaleDateString("en-PH", {
+      month: "short", day: "numeric", year: "numeric",
+    }) + " · " + d.toLocaleTimeString("en-PH", {
+      hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  const meta = (cat) => CATEGORY_META[cat] || { label: cat, color: "var(--text-secondary)", bg: "var(--bg-secondary)" };
+
+  return (
+    <div style={S.section}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
+        <div style={S.sTitle}>📋 Team Log</div>
+        <span style={{
+          fontSize: "10px", color: "var(--text-muted)",
+          background: "var(--bg-secondary)", padding: "3px 8px",
+          borderRadius: "10px", border: "0.5px solid var(--border-main)",
+        }}>
+          Last {Math.min(logs.length, 150)} actions · Read only
+        </span>
+      </div>
+      <div style={{ ...S.sDesc, marginBottom: "12px" }}>
+        A record of recent actions and changes made across the team. Visible to admins only.
+      </div>
+
+      {loading && (
+        <div style={{ fontSize: "12px", color: "var(--text-disabled)", padding: "20px 0", textAlign: "center" }}>
+          Loading log…
+        </div>
+      )}
+
+      {!loading && logs.length === 0 && (
+        <div style={{ fontSize: "12px", color: "var(--text-disabled)", padding: "20px 0", textAlign: "center" }}>
+          No actions recorded yet. Activity will appear here as the team makes changes.
+        </div>
+      )}
+
+      {!loading && logs.map((log) => {
+        const m = meta(log.category);
+        return (
+          <div key={log.id} style={{
+            display: "flex", alignItems: "flex-start", gap: "12px",
+            padding: "10px 0", borderBottom: "0.5px solid var(--border-light)",
+          }}>
+            <span style={{
+              fontSize: "9px", fontWeight: "700", padding: "2px 7px",
+              borderRadius: "8px", background: m.bg, color: m.color,
+              border: `1px solid ${m.color}33`, whiteSpace: "nowrap",
+              marginTop: "2px", flexShrink: 0, textTransform: "uppercase",
+            }}>
+              {m.label}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "2px" }}>
+                {log.action}
+                {log.targetName && (
+                  <span style={{ fontWeight: 400, color: "var(--text-secondary)" }}>
+                    {" "}— {log.targetName}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                by <span style={{ fontWeight: "600", color: "var(--text-secondary)" }}>{log.performedBy}</span>
+                <span style={{ margin: "0 6px", color: "var(--border-main)" }}>·</span>
+                {formatTime(log.timestamp)}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN Settings page
 // ═══════════════════════════════════════════════════════════════════════════════
 export function Settings() {
-  const { userProfile }                           = useAuth();
+  const { userProfile }                               = useAuth();
   const { team, members, isAdmin, updateTeamSettings,
-          grantAdmin, revokeAdmin, removeMember } = useTeam();
-  const { currentUser }                           = useAuth();
+          grantAdmin, revokeAdmin, removeMember }     = useTeam();
+  const { currentUser }                               = useAuth();
 
+  // Documents (papers) needed for delete-status auto-move and subject-type guard
   const [papers, setPapers] = useState([]);
 
   useEffect(() => {
     if (!userProfile?.teamId) return;
-    const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
+    const q = query(
+      collection(db, "papers"),
+      where("teamId", "==", userProfile.teamId)
+    );
     const unsub = onSnapshot(q, (snap) =>
       setPapers(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !!d.projectId))
     );
     return unsub;
   }, [userProfile?.teamId]);
 
+  // ── Guard: admin only ──────────────────────────────────────────────────────
   if (!isAdmin()) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-disabled)", fontFamily: "Tahoma,Geneva,sans-serif" }}>
@@ -1015,17 +1019,16 @@ export function Settings() {
     );
   }
 
-  const saveStatuses    = (list)  => updateTeamSettings({ documentStatuses:       list });
-  const saveSubjects    = (list)  => updateTeamSettings({ documentSubjectTypes:   list });
-  const saveStageConfig = (cfg)   => updateTeamSettings({ subjectTypeStageConfig: cfg  });
-  const saveThresholds  = (list)  => updateTeamSettings({ dashboardThresholds:    list });
-  const saveNotifPrefs  = (prefs) => updateTeamSettings({ notificationPrefs:      prefs });
+  // ── Helpers to save individual sections ───────────────────────────────────
+  const saveStatuses    = (list)  => updateTeamSettings({ documentStatuses:     list }, "Document status list updated");  // MODIFIED: added log message
+  const saveSubjects    = (list)  => updateTeamSettings({ documentSubjectTypes: list }, "Subject types updated");          // MODIFIED: added log message
+  const saveThresholds  = (list)  => updateTeamSettings({ dashboardThresholds:  list }, "Dashboard color thresholds updated"); // MODIFIED: added log message
+  const saveNotifPrefs  = (prefs) => updateTeamSettings({ notificationPrefs:    prefs }, "Notification preferences updated");  // MODIFIED: added log message
 
-  const statuses     = team?.documentStatuses       || DEFAULT_STATUSES;
-  const subjectTypes = team?.documentSubjectTypes   || DEFAULT_SUBJECT_TYPES;
-  const stageConfig  = team?.subjectTypeStageConfig || {};
-  const thresholds   = team?.dashboardThresholds    || DEFAULT_THRESHOLDS;
-  const notifPrefs   = team?.notificationPrefs      || {};
+  const statuses    = team?.documentStatuses     || DEFAULT_STATUSES;
+  const subjectTypes= team?.documentSubjectTypes || DEFAULT_SUBJECT_TYPES;
+  const thresholds  = team?.dashboardThresholds  || DEFAULT_THRESHOLDS;
+  const notifPrefs  = team?.notificationPrefs    || {};
 
   return (
     <div style={S.page}>
@@ -1034,31 +1037,46 @@ export function Settings() {
         <div style={S.sub}>Admin-only. Changes apply immediately across the entire team.</div>
       </div>
 
-      <ThemeControlSection teamId={userProfile?.teamId} />
+      {/* NEW: Theme Control Section */}
+      <ThemeControlSection teamId={userProfile?.teamId} userProfile={userProfile} /> {/* MODIFIED: pass userProfile for logging */}
 
-      <TeamProfileSection team={team} updateTeamSettings={updateTeamSettings} />
+      <TeamProfileSection
+        team={team}
+        updateTeamSettings={updateTeamSettings}
+      />
 
       <MemberManagementSection
-        members={members} currentUser={currentUser}
-        grantAdmin={grantAdmin} revokeAdmin={revokeAdmin} removeMember={removeMember}
+        members={members}
+        currentUser={currentUser}
+        grantAdmin={grantAdmin}
+        revokeAdmin={revokeAdmin}
+        removeMember={removeMember}
       />
 
-      <StatusListSection statuses={statuses} onSave={saveStatuses} papers={papers} />
-
-      <SubjectTypesSection subjectTypes={subjectTypes} onSave={saveSubjects} papers={papers} />
-
-      <SubjectStageConfigSection
-        subjectTypes={subjectTypes}
+      <StatusListSection
         statuses={statuses}
-        config={stageConfig}
-        onSave={saveStageConfig}
+        onSave={saveStatuses}
+        papers={papers}
       />
 
-      <ArchiveAuthSection team={team} updateTeamSettings={updateTeamSettings} />
+      <SubjectTypesSection
+        subjectTypes={subjectTypes}
+        onSave={saveSubjects}
+        papers={papers}
+      />
 
-      <ThresholdsSection thresholds={thresholds} onSave={saveThresholds} />
+      <ThresholdsSection
+        thresholds={thresholds}
+        onSave={saveThresholds}
+      />
 
-      <NotificationsSection prefs={notifPrefs} onSave={saveNotifPrefs} />
+      <NotificationsSection
+        prefs={notifPrefs}
+        onSave={saveNotifPrefs}
+      />
+
+      {/* ADDED: Team Log — admin only, read only, bottom of settings */}
+      <TeamLogSection teamId={userProfile?.teamId} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "./AuthContext";
+import { logAction } from "../utils/logAction";
 
 const TeamContext = createContext();
 export const useTeam = () => useContext(TeamContext);
@@ -80,28 +81,84 @@ export function TeamProvider({ children }) {
   }
 
   async function approveRequest(userId) {
-    await updateDoc(doc(db, "users", userId), { status: "active", teamId: userProfile.teamId });
+    const userSnap = await getDoc(doc(db, "users", userId));
+    const targetName = userSnap.exists() ? userSnap.data().displayName : "Unknown";
+    await updateDoc(doc(db, "users", userId), {
+      status: "active",
+      teamId: userProfile.teamId  // ✅ FIX: Always ensure teamId is set on approval
+    });
+    await logAction({
+      teamId: userProfile.teamId,
+      action: "Approved join request",
+      category: "member",
+      performedBy: userProfile.displayName || userProfile.email,
+      targetName,
+    });
   }
 
   async function rejectRequest(userId) {
+    const userSnap = await getDoc(doc(db, "users", userId));
+    const targetName = userSnap.exists() ? userSnap.data().displayName : "Unknown";
     await updateDoc(doc(db, "users", userId), { teamId: null, status: "rejected" });
+    await logAction({
+      teamId: userProfile.teamId,
+      action: "Rejected join request",
+      category: "member",
+      performedBy: userProfile.displayName || userProfile.email,
+      targetName,
+    });
   }
 
   async function removeMember(userId) {
+    const userSnap = await getDoc(doc(db, "users", userId));
+    const targetName = userSnap.exists() ? userSnap.data().displayName : "Unknown";
     await updateDoc(doc(db, "users", userId), { teamId: null, status: "removed" });
+    await logAction({
+      teamId: userProfile.teamId,
+      action: "Removed member from team",
+      category: "member",
+      performedBy: userProfile.displayName || userProfile.email,
+      targetName,
+    });
   }
 
   async function grantAdmin(userId) {
+    const userSnap = await getDoc(doc(db, "users", userId));
+    const targetName = userSnap.exists() ? userSnap.data().displayName : "Unknown";
     await updateDoc(doc(db, "users", userId), { role: "admin" });
+    await logAction({
+      teamId: userProfile.teamId,
+      action: "Promoted to Admin",
+      category: "member",
+      performedBy: userProfile.displayName || userProfile.email,
+      targetName,
+    });
   }
 
   async function revokeAdmin(userId) {
+    const userSnap = await getDoc(doc(db, "users", userId));
+    const targetName = userSnap.exists() ? userSnap.data().displayName : "Unknown";
     await updateDoc(doc(db, "users", userId), { role: "member" });
+    await logAction({
+      teamId: userProfile.teamId,
+      action: "Demoted to Member",
+      category: "member",
+      performedBy: userProfile.displayName || userProfile.email,
+      targetName,
+    });
   }
 
-  async function updateTeamSettings(updates) {
+  async function updateTeamSettings(updates, logMessage = null) {
     if (!userProfile?.teamId) return;
     await updateDoc(doc(db, "teams", userProfile.teamId), updates);
+    if (logMessage) {
+      await logAction({
+        teamId: userProfile.teamId,
+        action: logMessage,
+        category: "settings",
+        performedBy: userProfile.displayName || userProfile.email,
+      });
+    }
   }
 
   async function getTeamByInviteCode(code) {

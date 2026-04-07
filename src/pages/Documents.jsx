@@ -872,7 +872,7 @@ export default function Documents() {
     });
   }
 
-  // ── Archive: the ONLY place that writes hidden+archivedAt+archivedBy ────────
+ // ── Archive: the ONLY place that writes hidden+archivedAt+archivedBy ────────
   // This bypasses handleStatusChange entirely. Do not merge these two paths.
   async function handleArchiveConfirm() {
     if (!archiveTarget) return;
@@ -903,6 +903,16 @@ export default function Documents() {
       }),
     });
     setExpanded((prev) => { const n = { ...prev }; delete n[archiveTarget.id]; return n; });
+
+    // ── Audit log ────────────────────────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      `Archived document: ${archiveTarget.subject}`,
+      category:    "document",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  archiveTarget.subject || null,
+    });
+
     setArchiveTarget(null);
     setArchiveSaving(false);
   }

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import {
   doc, updateDoc, collection, query,
-  where, onSnapshot, getDocs, serverTimestamp, addDoc
+  where, onSnapshot, getDocs, serverTimestamp, addDoc, getDoc // ✅ added getDoc (was missing from imports, used in approveRequest etc)
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "./AuthContext";
@@ -22,6 +22,11 @@ export function TeamProvider({ children }) {
 
   function isAdmin() {
     return adminRoles.includes(userProfile?.role);
+  }
+
+  // ADDED: owner check — used for Transfer Ownership UI gate
+  function isOwner() {
+    return userProfile?.role === "owner";
   }
 
   // ── Team listener ──────────────────────────────────────────────────────────
@@ -74,7 +79,7 @@ export function TeamProvider({ children }) {
     });
     await updateDoc(doc(db, "users", userProfile.uid), {
       teamId: teamRef.id,
-      role: "admin",
+      role: "owner", // MODIFIED: creator becomes owner (displayed as admin to others)
       status: "active",
     });
     return teamRef.id;
@@ -148,6 +153,31 @@ export function TeamProvider({ children }) {
     });
   }
 
+  // ADDED: Transfer ownership — owner picks an existing admin → they become owner, current owner becomes admin
+  // Sequential updateDoc consistent with existing codebase pattern (no batch needed for 2-document write)
+  async function transferOwnership(newOwnerId) {
+    const newOwnerSnap = await getDoc(doc(db, "users", newOwnerId));
+    if (!newOwnerSnap.exists()) throw new Error("Target user not found.");
+    const newOwnerName = newOwnerSnap.data().displayName || "Unknown";
+
+    // Guard: target must currently be an admin (not owner, not member)
+    if (newOwnerSnap.data().role !== "admin") throw new Error("Ownership can only be transferred to an existing admin.");
+
+    // Step 1: promote target admin → owner
+    await updateDoc(doc(db, "users", newOwnerId), { role: "owner" });
+
+    // Step 2: demote current owner → admin
+    await updateDoc(doc(db, "users", userProfile.uid), { role: "admin" });
+
+    await logAction({
+      teamId: userProfile.teamId,
+      action: `Transferred ownership to ${newOwnerName}`,
+      category: "member",
+      performedBy: userProfile.displayName || userProfile.email,
+      targetName: newOwnerName,
+    });
+  }
+
   async function updateTeamSettings(updates, logMessage = null) {
     if (!userProfile?.teamId) return;
     await updateDoc(doc(db, "teams", userProfile.teamId), updates);
@@ -170,9 +200,10 @@ export function TeamProvider({ children }) {
 
   return (
     <TeamContext.Provider value={{
-      team, members, pendingRequests, isAdmin,
+      team, members, pendingRequests, isAdmin, isOwner, // ADDED: isOwner exposed
       createTeam, approveRequest, rejectRequest,
       removeMember, grantAdmin, revokeAdmin,
+      transferOwnership, // ADDED: transferOwnership exposed
       updateTeamSettings, getTeamByInviteCode,
     }}>
       {children}

@@ -413,21 +413,29 @@ function TeamProfileSection({ team, updateTeamSettings }) {
 function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin, removeMember, userProfile, teamId }) { // MODIFIED: added userProfile, teamId for logging
   const [confirmAction, setConfirmAction] = useState(null); // { type, member }
 
+  // ADDED: Role dropdown handler — writes selected role directly to Firestore, logs non-owner admin action
+  async function updateMemberRole(userId, newRole, memberDisplayName) {
+    await updateDoc(doc(db, "users", userId), { role: newRole });
+    logAction({
+      teamId,
+      action: `Changed ${memberDisplayName}'s role to ${newRole}`,
+      category: "member",
+      performedBy: userProfile?.displayName || userProfile?.email || "Unknown",
+      targetName: memberDisplayName || null,
+    });
+  }
+
   async function executeAction() {
     const { type, member } = confirmAction;
-    if (type === "promote")  await grantAdmin(member.id);
-    if (type === "demote")   await revokeAdmin(member.id);
     if (type === "remove")   await removeMember(member.id);
     // ADDED: log the member action
-    const actionText = { promote: `Promoted ${member.displayName} to Admin`, demote: `Demoted ${member.displayName} to Member`, remove: `Removed member ${member.displayName} from team` }[type];
+    const actionText = { remove: `Removed member ${member.displayName} from team` }[type];
     logAction({ teamId, action: actionText, category: "member", performedBy: userProfile?.displayName || userProfile?.email || "Unknown", targetName: member.displayName || null });
     setConfirmAction(null);
   }
 
   const confirmMsg = confirmAction && {
-    promote: `Promote ${confirmAction.member.displayName} to Admin? They will gain full access to Settings and all admin controls.`,
-    demote:  `Demote ${confirmAction.member.displayName} to Member? They will lose admin access.`,
-    remove:  `Remove ${confirmAction.member.displayName} from the team? This cannot be undone.`,
+    remove: `Remove ${confirmAction.member.displayName} from the team? This cannot be undone.`,
   }[confirmAction.type];
 
   return (
@@ -436,8 +444,10 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
       <div style={S.sDesc}>Manage roles and access for all active team members.</div>
 
       {members.map((m) => {
-        const isSelf  = m.uid === currentUser?.uid || m.id === currentUser?.uid;
-        const isAdm   = m.role === "admin" || m.role === "manager" || m.role === "supervisor";
+        const isSelf    = m.uid === currentUser?.uid || m.id === currentUser?.uid;
+        const isOwner   = m.role === "owner";
+        const isAdm     = m.role === "admin" || m.role === "owner" || m.role === "supervisor";
+        const badgeRole = isOwner ? "admin" : (m.role || "member");
 
         return (
           <div key={m.id || m.uid} style={S.memberRow}>
@@ -450,14 +460,26 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={S.badge(isAdm ? "var(--accent)" : "var(--text-secondary)")}>
-                {m.role || "member"}
+                {badgeRole}
               </span>
-              {!isSelf && (
+              {!isSelf && !isOwner && (
                 <>
-                  {isAdm
-                    ? <button style={S.btn(false, false, true)} onClick={() => setConfirmAction({ type: "demote",  member: m })}>Demote</button>
-                    : <button style={S.btn(false, false, true)} onClick={() => setConfirmAction({ type: "promote", member: m })}>Make Admin</button>
-                  }
+                  <select
+                    value={m.role || "member"}
+                    onChange={(e) => updateMemberRole(m.id, e.target.value, m.displayName)}
+                    style={{
+                      padding: "4px 8px", borderRadius: "6px", fontSize: "11px",
+                      fontFamily: "Tahoma,Geneva,sans-serif",
+                      border: "1px solid var(--border-input)",
+                      background: "var(--bg-input)", color: "var(--text-primary)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="admin">admin</option>
+                    <option value="technical">technical</option>
+                    <option value="supervisor">supervisor</option>
+                    <option value="member">member</option>
+                  </select>
                   <button style={S.btn(false, true, true)} onClick={() => setConfirmAction({ type: "remove", member: m })}>Remove</button>
                 </>
               )}
@@ -480,7 +502,6 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
     </div>
   );
 }
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 3 — Document Status List
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1040,7 +1061,7 @@ export function Settings() {
         <div style={S.sub}>Admin-only. Changes apply immediately across the entire team.</div>
       </div>
 
-      {/* NEW: Theme Control Section */}
+     {/* NEW: Theme Control Section */}
       <ThemeControlSection teamId={userProfile?.teamId} userProfile={userProfile} /> {/* MODIFIED: pass userProfile for logging */}
 
       <TeamProfileSection
@@ -1051,8 +1072,6 @@ export function Settings() {
       <MemberManagementSection
         members={members}
         currentUser={currentUser}
-        grantAdmin={grantAdmin}
-        revokeAdmin={revokeAdmin}
         removeMember={removeMember}
         userProfile={userProfile}
         teamId={userProfile?.teamId}

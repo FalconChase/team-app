@@ -16,8 +16,8 @@ export function TeamProvider({ children }) {
   const [members,         setMembers]         = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
 
-  // Derive admin flag from userProfile directly — stable, no function reference
-  const adminRoles = ["admin", "manager", "supervisor"];
+// Derive admin flag from userProfile directly — stable, no function reference
+  const adminRoles = ["admin", "owner", "manager", "supervisor"];
   const userIsAdmin = adminRoles.includes(userProfile?.role);
 
   function isAdmin() {

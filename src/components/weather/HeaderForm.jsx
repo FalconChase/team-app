@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { fetchLogoUrl, uploadLogo } from '../../services/logoService'; // 🔺 SURGICAL INSERT
 
 export function HeaderForm({ info, onChange }) {
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser } = useAuth(); // 🔺 SURGICAL: added currentUser
   const teamId = userProfile?.teamId;
+  const isAdmin = userProfile?.role === 'admin'; // 🔺 SURGICAL INSERT
 
   const [projects, setProjects] = useState([]);
+  const [logoLoading, setLogoLoading] = useState(false); // 🔺 SURGICAL INSERT
 
   useEffect(() => {
     if (!teamId) return;
@@ -26,6 +29,17 @@ export function HeaderForm({ info, onChange }) {
     fetchProjects();
   }, [teamId]);
 
+  // 🔺 SURGICAL INSERT — load global logo from Firestore on mount
+  useEffect(() => {
+    async function loadLogo() {
+      if (!info.logoUrl) {
+        const url = await fetchLogoUrl();
+        if (url) onChange({ ...info, logoUrl: url });
+      }
+    }
+    loadLogo();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     onChange({ ...info, [name]: value });
@@ -43,7 +57,6 @@ export function HeaderForm({ info, onChange }) {
         location:    project.location    || '',
       });
     } else {
-      // blank option selected — clear the four fields
       onChange({
         ...info,
         contractId:  '',
@@ -54,14 +67,18 @@ export function HeaderForm({ info, onChange }) {
     }
   };
 
-  const handleLogoUpload = (e) => {
+  // 🔺 SURGICAL REPLACEMENT — now uploads to Firebase Storage instead of Base64
+  const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onChange({ ...info, logoUrl: reader.result });
-      };
-      reader.readAsDataURL(file);
+    if (!file || !isAdmin) return;
+    try {
+      setLogoLoading(true);
+      const url = await uploadLogo(file, currentUser.uid);
+      onChange({ ...info, logoUrl: url });
+    } catch (err) {
+      console.error('HeaderForm: failed to upload logo', err);
+    } finally {
+      setLogoLoading(false);
     }
   };
 
@@ -100,7 +117,6 @@ export function HeaderForm({ info, onChange }) {
         <h3>Project Details</h3>
       </div>
 
-      {/* Contract ID — dropdown */}
       <div className="wt-field">
         <label>Contract ID</label>
         <select
@@ -117,7 +133,6 @@ export function HeaderForm({ info, onChange }) {
         </select>
       </div>
 
-      {/* Project Name — auto-filled, read-only */}
       <div className="wt-field wt-form-col-2">
         <label>Project Name</label>
         <input
@@ -130,7 +145,6 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
-      {/* Contractor — auto-filled, read-only */}
       <div className="wt-field">
         <label>Contractor</label>
         <input
@@ -143,7 +157,6 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
-      {/* Month — manual */}
       <div className="wt-field">
         <label>Month</label>
         <input
@@ -155,7 +168,6 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
-      {/* Year — manual */}
       <div className="wt-field">
         <label>Year</label>
         <input
@@ -167,7 +179,6 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
-      {/* Location — auto-filled, read-only */}
       <div className="wt-field wt-form-col-full">
         <label>Project Location</label>
         <input
@@ -207,6 +218,7 @@ export function HeaderForm({ info, onChange }) {
         />
       </div>
 
+      {/* 🔺 SURGICAL MODIFY — logo field now shows for all but upload is admin-only */}
       <div className="wt-field">
         <label>Logo</label>
         <div className="wt-logo-row">
@@ -215,12 +227,18 @@ export function HeaderForm({ info, onChange }) {
               <img src={info.logoUrl} alt="Logo Preview" />
             </div>
           )}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleLogoUpload}
-            className="wt-file-input"
-          />
+          {isAdmin && (
+            <>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="wt-file-input"
+                disabled={logoLoading}
+              />
+              {logoLoading && <span style={{ fontSize: '12px', color: '#888' }}>Uploading...</span>}
+            </>
+          )}
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import {
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTeam } from "../contexts/TeamContext";
+import { logAction } from "../utils/logAction"; // ── logAction audit logging ──
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(str) {
@@ -204,10 +205,26 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
         payload.createdBy = userProfile.displayName || userProfile.email;
         payload.createdAt = serverTimestamp();
         await addDoc(collection(db, "records"), payload);
+        // ── Patch: log "added record" ──────────────────────────────────────
+        logAction({
+          teamId,
+          action:      "added record",
+          category:    "record",
+          performedBy: userProfile.displayName || userProfile.email || "Unknown",
+          targetName:  projects.find(p => p.id === form.projectId)?.projectId || form.projectId || null,
+        });
       } else {
         payload.lastModifiedBy = userProfile.displayName || userProfile.email;
         payload.lastModifiedAt = serverTimestamp();
         await updateDoc(doc(db, "records", record.id), payload);
+        // ── Patch: log "edited record" ─────────────────────────────────────
+        logAction({
+          teamId,
+          action:      "edited record",
+          category:    "record",
+          performedBy: userProfile.displayName || userProfile.email || "Unknown",
+          targetName:  projects.find(p => p.id === form.projectId)?.projectId || form.projectId || null,
+        });
       }
       onSaved(); onClose();
     } catch (e) {
@@ -440,6 +457,14 @@ export default function Records() {
 
   async function handleDelete(id) {
     await deleteDoc(doc(db, "records", id));
+    // ── Patch: log "deleted record" ─────────────────────────────────────────
+    logAction({
+      teamId:      userProfile.teamId,
+      action:      "deleted record",
+      category:    "record",
+      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      targetName:  null,
+    });
   }
 
   function projectLabel(projectId) {

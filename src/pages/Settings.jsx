@@ -1007,13 +1007,127 @@ function TeamLogSection({ teamId }) {
     </div>
   );
 }
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 8 — Transfer Ownership (owner-only)
+// ═══════════════════════════════════════════════════════════════════════════════
+function TransferOwnershipSection({ members, currentUser, transferOwnership }) {
+  const adminCandidates = members.filter(
+    (m) => m.role === "admin" && m.uid !== currentUser?.uid && m.id !== currentUser?.uid
+  );
 
+  const [selectedId, setSelectedId]   = useState("");
+  const [confirm,    setConfirm]      = useState(false);
+  const [busy,       setBusy]         = useState(false);
+  const [error,      setError]        = useState(null);
+  const [done,       setDone]         = useState(false);
+
+  async function handleTransfer() {
+    if (!selectedId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await transferOwnership(selectedId);
+      setDone(true);
+    } catch (err) {
+      setError(err.message || "Transfer failed. Please try again.");
+    } finally {
+      setBusy(false);
+      setConfirm(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div style={S.section}>
+        <div style={S.sTitle}>👑 Transfer Ownership</div>
+        <div style={{
+          fontSize: "12px", color: "var(--success)", background: "var(--success-bg)",
+          borderRadius: "6px", padding: "12px 16px", marginTop: "8px",
+        }}>
+          ✓ Ownership transferred successfully. You are now an admin.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...S.section, borderColor: "#f0d060" }}>
+      <div style={S.sTitle}>👑 Transfer Ownership</div>
+      <div style={S.sDesc}>
+        Pass ownership of this team to an existing admin. You will become a regular admin.
+        This action cannot be undone without the new owner's cooperation.
+      </div>
+
+      {adminCandidates.length === 0 ? (
+        <div style={{
+          fontSize: "12px", color: "var(--text-disabled)",
+          background: "var(--bg-secondary)", borderRadius: "6px",
+          padding: "12px 16px", border: "0.5px solid var(--border-main)",
+        }}>
+          No eligible admins found. Promote at least one member to admin before transferring ownership.
+        </div>
+      ) : (
+        <>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={S.label}>Select new owner</label>
+            <select
+              value={selectedId}
+              onChange={(e) => { setSelectedId(e.target.value); setConfirm(false); setError(null); }}
+              style={{
+                ...S.input,
+                cursor: "pointer",
+              }}
+            >
+              <option value="">— Choose an admin —</option>
+              {adminCandidates.map((m) => (
+                <option key={m.id || m.uid} value={m.id || m.uid}>
+                  {m.displayName} (@{m.username || "—"})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedId && !confirm && (
+            <div style={S.saveBar}>
+              <button
+                style={S.btn(false, true)}
+                onClick={() => setConfirm(true)}
+                disabled={busy}
+              >
+                Transfer Ownership
+              </button>
+            </div>
+          )}
+
+          {confirm && (
+            <ConfirmBanner
+              message={`You are about to transfer ownership to ${adminCandidates.find(m => (m.id || m.uid) === selectedId)?.displayName}. You will become an admin. This cannot be undone.`}
+              onConfirm={handleTransfer}
+              onCancel={() => setConfirm(false)}
+            />
+          )}
+
+          {error && (
+            <div style={{
+              fontSize: "11px", color: "var(--danger)", background: "var(--danger-bg)",
+              borderRadius: "6px", padding: "8px 12px", marginTop: "10px",
+              border: "1px solid #f5c6c6",
+            }}>
+              ⚠ {error}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN Settings page
 // ═══════════════════════════════════════════════════════════════════════════════
 export function Settings() {
   const { userProfile }                               = useAuth();
-  const { team, members, isAdmin, updateTeamSettings,
+  const { team, members, isAdmin, isOwner,            // ADDED: isOwner
+          updateTeamSettings, transferOwnership,      // ADDED: transferOwnership
           grantAdmin, revokeAdmin, removeMember }     = useTeam();
   const { currentUser }                               = useAuth();
 
@@ -1101,6 +1215,15 @@ export function Settings() {
 
       {/* ADDED: Team Log — admin only, read only, bottom of settings */}
       <TeamLogSection teamId={userProfile?.teamId} />
+
+      {/* ADDED: Transfer Ownership — owner only, always last */}
+      {isOwner() && (
+        <TransferOwnershipSection
+          members={members}
+          currentUser={currentUser}
+          transferOwnership={transferOwnership}
+        />
+      )}
     </div>
   );
 }

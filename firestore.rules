@@ -1,37 +1,68 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         (request.auth.uid == userId ||
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor']);
     }
-
     match /teams/{teamId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
     }
-
     match /teamLogs/{logId} {
       allow write: if request.auth != null;
       allow read: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
     }
-
     // App-wide settings (logo, etc.) — admin-tier write, authenticated read
     match /appSettings/{docId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
     }
-
+    // Documents collection — all authenticated members can read, admin-tier can write
+    match /documents/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+    }
+    // Records / logbook
+    match /records/{recordId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+    }
+    // Projects
+    match /projects/{projectId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+    }
+    // Announcements — all members can read, anyone authenticated can write (matches your UI "Anyone can post")
+    match /announcements/{announcementId} {
+      allow read, write: if request.auth != null;
+    }
+    // Group Chat — all authenticated members
+    match /chats/{chatId} {
+      allow read, write: if request.auth != null;
+    }
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+    // Weather snapshots
+    match /weatherSnapshots/{snapId} {
+      allow read, write: if request.auth != null;
+    }
+    // Reminders — per user
+    match /reminders/{reminderId} {
+      allow read, write: if request.auth != null;
+    }
     // Deny everything else by default
     match /{document=**} {
       allow read, write: if false;
     }
-
   }
 }

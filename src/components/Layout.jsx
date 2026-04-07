@@ -25,8 +25,8 @@ export default function Layout({ children }) {
     navigate("/login");
   }
 
-  const roleColor = { admin: "#f0a500", manager: "#f0a500", supervisor: "#7ab3e0", member: "#aaa" };
-  const roleLabel = { admin: "Admin", manager: "Manager", supervisor: "Supervisor", member: "Member" };
+  const roleColor = { owner: "#f0a500", admin: "#f0a500", manager: "#f0a500", supervisor: "#7ab3e0", member: "#aaa" };
+  const roleLabel = { owner: "Admin", admin: "Admin", manager: "Manager", supervisor: "Supervisor", member: "Member" };
 
   const s = {
     shell: { display: "flex", flexDirection: "column", minHeight: "100vh", fontFamily: "Tahoma, Geneva, sans-serif", background: "#f4f6f9" },

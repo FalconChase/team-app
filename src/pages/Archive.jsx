@@ -76,6 +76,16 @@ function RestoreAuthModal({ document: d, teamId, userProfile, onSuccess, onClose
         }),
       });
 
+      // ✅ SURGICAL INSERT — log restore action to audit trail
+      await logAction({
+        teamId:      teamId,
+        action:      "Restored document from Archive",
+        category:    "document",
+        performedBy: userProfile.displayName || userProfile.email || "Unknown",
+        targetName:  d.subject || null,
+      });
+      // ✅ END SURGICAL INSERT
+
       onSuccess();
     } catch (err) {
       console.error("Restore failed:", err);

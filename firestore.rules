@@ -11,6 +11,17 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+      // Projects subcollection
+      match /projects/{projectId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+      }
+      // Weather log snapshots subcollection
+      match /weatherLogs/{logId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
     }
     match /teamLogs/{logId} {
       allow write: if request.auth != null;
@@ -23,37 +34,35 @@ service cloud.firestore {
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
     }
-    // Documents collection — all authenticated members can read, admin-tier can write
-    match /documents/{docId} {
+    // Papers (documents tab)
+    match /papers/{paperId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
     }
-    // Records / logbook
+    // Archive
+    match /archive/{archiveId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+    }
+    // Records
     match /records/{recordId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
     }
-    // Projects
-    match /projects/{projectId} {
+    // Member files
+    match /memberFiles/{fileId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner', 'manager', 'supervisor'];
+      allow write: if request.auth != null;
     }
-    // Announcements — all members can read, anyone authenticated can write (matches your UI "Anyone can post")
+    // Announcements — anyone authenticated can post
     match /announcements/{announcementId} {
       allow read, write: if request.auth != null;
     }
-    // Group Chat — all authenticated members
-    match /chats/{chatId} {
-      allow read, write: if request.auth != null;
-    }
+    // Group Chat messages
     match /messages/{messageId} {
-      allow read, write: if request.auth != null;
-    }
-    // Weather snapshots
-    match /weatherSnapshots/{snapId} {
       allow read, write: if request.auth != null;
     }
     // Reminders — per user

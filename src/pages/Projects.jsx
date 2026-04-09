@@ -48,7 +48,7 @@ function emptyForm() {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Projects() {
   const { userProfile } = useAuth();
-  const isAdmin = userProfile?.role === "admin";
+  const canEdit = ["admin", "owner", "manager", "supervisor"].includes(userProfile?.role);
   const teamId  = userProfile?.teamId;
 
   const [projects,     setProjects]     = useState([]);
@@ -369,7 +369,7 @@ export default function Projects() {
             {loading ? "Loading…" : `${projects.length} project${projects.length !== 1 ? "s" : ""} registered`}
           </p>
         </div>
-        {isAdmin && (
+        {canEdit && (
           <button className={styles.addBtn} onClick={() => { setAddError(""); setShowAddModal(true); }}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -379,7 +379,7 @@ export default function Projects() {
         )}
       </div>
 
-      {/* ── Content ── */}
+     {/* ── Content ── */}
       {loading ? (
         <div className={styles.loadingWrap}>
           <div className={styles.spinner} />
@@ -394,7 +394,7 @@ export default function Projects() {
             </svg>
           </div>
           <p className={styles.emptyTitle}>No projects yet</p>
-          {isAdmin && <p className={styles.emptyHint}>Click "Add Project" to register the first one.</p>}
+          {canEdit && <p className={styles.emptyHint}>Click "Add Project" to register the first one.</p>}
         </div>
       ) : (
         <div className={styles.list}>
@@ -412,7 +412,7 @@ export default function Projects() {
                     <span className={styles.idBadge}>{p.projectId}</span>
                     {p.projectName
                       ? <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{p.projectName}</span>
-                      : isAdmin && (
+                      : canEdit && (
                           <span style={{ fontSize: "0.78rem", color: "var(--text-disabled)", fontStyle: "italic" }}>
                             Details not yet filled — click Show Details to edit
                           </span>
@@ -442,7 +442,7 @@ export default function Projects() {
                       <div className={styles.detailSection}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                           <p className={styles.sectionLabel} style={{ marginBottom: 0 }}>Project Info</p>
-                          {isAdmin && (
+                          {canEdit && (
                             <button className={styles.editBtn} onClick={() => openEditProject(p)}>
                               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                                 <path d="M8.5 1.5l2 2L4 10H2v-2L8.5 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -471,7 +471,7 @@ export default function Projects() {
                               <span className={styles.autoDot} />
                               Contract Time Extensions
                             </p>
-                            {isAdmin && (
+                            {canEdit && (
                               <button className={styles.editBtn} style={{ fontSize: "0.72rem" }} onClick={() => openAddCTE(p)}>
                                 + Add CTE
                               </button>
@@ -491,7 +491,7 @@ export default function Projects() {
                                   </div>
                                   <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                                     <span className={styles.blueVal} style={{ fontSize: "0.82rem" }}>{fmtDate(runningExpiry)}</span>
-                                    {isAdmin && (
+                                    {canEdit && (
                                       <>
                                         <button className={styles.editBtn} style={{ padding: "0.15rem 0.45rem", fontSize: "0.7rem" }} onClick={() => openEditCTE(p, cte, i)}>Edit</button>
                                         <button className={styles.editBtn} style={{ padding: "0.15rem 0.45rem", fontSize: "0.7rem", color: "var(--danger)" }} onClick={() => handleDeleteCTE(p, i)}>✕</button>
@@ -543,7 +543,7 @@ export default function Projects() {
                               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                                 <path d="M8.5 1.5l2 2L4 10H2v-2L8.5 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                               </svg>
-                              {isAdmin ? "Edit" : "Log"}
+                              {canEdit ? "Edit" : "Log"}
                             </button>
                           </div>
                           <div className={styles.progressGroup}>
@@ -831,9 +831,9 @@ export default function Projects() {
           <div className={styles.modal} style={{ maxWidth: 420 }}>
             <div className={styles.modalHead}>
               <div>
-                <h2 className={styles.modalTitle}>{isAdmin ? "Edit Accomplishment" : "Log Accomplishment"}</h2>
+                <h2 className={styles.modalTitle}>{canEdit ? "Edit Accomplishment" : "Log Accomplishment"}</h2>
                 <p className={styles.modalSub}>
-                  {isAdmin ? "Update planned and actual accomplishment percentages" : "Enter your planned and actual accomplishment for this period"}
+                  {canEdit ? "Update planned and actual accomplishment percentages" : "Enter your planned and actual accomplishment for this period"}
                 </p>
               </div>
               <button className={styles.closeBtn} onClick={() => setEditAccomp(null)}>

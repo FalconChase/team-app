@@ -1,7 +1,7 @@
 import React from 'react';
 import { LOGBOOK_WEATHER_COLORS } from '../../constants/weatherConstants';
 
-export function StandardPie({ dayNumber, hourlyData = [], isExplanation = false }) {
+export function StandardPie({ dayNumber, hourlyData = [], isExplanation = false, hourRange }) {
   const center = 50;
   const outerRadius  = 39;
   const middleRadius = 26;
@@ -34,12 +34,13 @@ export function StandardPie({ dayNumber, hourlyData = [], isExplanation = false 
       `;
 
       const hourIdx = isInner ? i + 12 : i;
-      const val = hourlyData[hourIdx] || 0;
+      const inRange = isExplanation || !hourRange || (hourIdx >= hourRange.start && hourIdx <= hourRange.end);
+      const val = inRange ? (hourlyData[hourIdx] || 0) : 0;
       return (
         <path
           key={hourIdx}
           d={d}
-          fill={LOGBOOK_WEATHER_COLORS[val] || '#ffffff'}
+          fill={inRange ? (LOGBOOK_WEATHER_COLORS[val] || '#ffffff') : '#e5e7eb'}
           stroke="#000000"
           strokeWidth="0.5"
         />

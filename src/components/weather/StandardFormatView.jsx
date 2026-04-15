@@ -5,7 +5,7 @@ import { StandardPie } from './StandardPie';
 
 const DEFAULT_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Department_of_Public_Works_and_Highways_%28DPWH%29.svg/1280px-Department_of_Public_Works_and_Highways_%28DPWH%29.svg.png?20260123161510';
 
-export function StandardFormatView({ data, contractInfo }) {
+export function StandardFormatView({ data, contractInfo, hourRange }) {
   const days = Array.from({ length: DAYS_IN_MONTH }, (_, i) => i + 1);
 
   return (
@@ -235,7 +235,7 @@ export function StandardFormatView({ data, contractInfo }) {
                   minWidth: 0,
                   minHeight: 0,
                 }}>
-                  <StandardPie dayNumber={day} hourlyData={data[day - 1]} />
+                  <StandardPie dayNumber={day} hourlyData={data[day - 1]} hourRange={hourRange} />
                 </div>
               ))}
 

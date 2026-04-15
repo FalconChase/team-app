@@ -21,10 +21,25 @@ const TABS = [
   { id: 'standard-format', label: 'Standard Format' },
 ];
 
+// ── Hour-range mode definitions ───────────────────────────────────────────────
+const HOUR_MODES = [
+  { id: '24h', label: '24-Hour', start: 0,  end: 23 },
+  { id: '12h', label: '12-Hour', start: 6,  end: 17 },  // renders G–R (indices 6–17)
+];
+
 function makeEmptyGrid() {
   return Array.from({ length: DAYS_IN_MONTH }, () =>
     Array.from({ length: HOURS_IN_DAY }, () => 0)
   );
+}
+
+// ── Format an hour number as display label (e.g. 0 → "12 AM", 13 → "1 PM") ──
+// endLabel=true returns the closing hour of that slot (e.g. index 17 → "6 PM" not "5 PM")
+function fmtHour(h) {
+  if (h === 0)  return '12 AM';
+  if (h === 12) return '12 PM';
+  if (h === 24) return '12 AM';
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
 }
 
 export default function WeatherTool() {
@@ -37,6 +52,23 @@ export default function WeatherTool() {
   const [isAutoGenerateOpen, setAutoGenOpen]    = useState(false);
   const [isLogsOpen, setLogsOpen]               = useState(false);
   const [weatherData, setWeatherData]           = useState(makeEmptyGrid);
+
+  // ── Hour-range state ─────────────────────────────────────────────────────────
+  const [hourMode,        setHourMode]          = useState('24h');
+  const [customStart,     setCustomStart]       = useState(0);
+  const [customEnd,       setCustomEnd]         = useState(23);
+
+  // ── Derive the active start/end from current mode ────────────────────────────
+  const activeStart = hourMode === 'custom'
+    ? customStart
+    : HOUR_MODES.find(m => m.id === hourMode).start;
+  const activeEnd   = hourMode === 'custom'
+    ? customEnd
+    : HOUR_MODES.find(m => m.id === hourMode).end;
+
+  // ── Slice each day's hourly array to only the selected window ────────────────
+  // weatherData (full 24h) is NEVER mutated — this is a derived display value only
+  const hourRange = { start: activeStart, end: activeEnd };
 
   const handleDataChange = (dayIdx, hourIdx, value) => {
     setWeatherData(prev => {
@@ -127,6 +159,10 @@ export default function WeatherTool() {
     }, 500);
   };
 
+  // ── Hour-range control bar (shown only on chart/logbook/standard-format) ─────
+  const isPreviewTab = ['chart', 'logbook', 'standard-format'].includes(activeTab);
+  const isLogbook    = activeTab === 'logbook';
+
   return (
     <div className="wt-page">
 
@@ -179,6 +215,88 @@ export default function WeatherTool() {
         <p className="wt-section-label">PCMA Project Metadata</p>
         <HeaderForm info={contractInfo} onChange={setContractInfo} />
 
+        {/* ── Hour-range control bar ── */}
+        {isPreviewTab && (
+          <div className="wt-hour-range-bar">
+
+            <span className="wt-hour-range-label">Hour View:</span>
+
+            {/* Mode pill buttons */}
+            <div className="wt-hour-mode-group">
+              {HOUR_MODES.map(mode => (
+                <button
+                  key={mode.id}
+                  className={`wt-hour-mode-btn${hourMode === mode.id ? ' active' : ''}`}
+                  onClick={() => setHourMode(mode.id)}
+                  title={`${fmtHour(mode.start + 1)} – ${fmtHour(mode.end + 1)}`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+              <button
+                className={`wt-hour-mode-btn${hourMode === 'custom' ? ' active' : ''}`}
+                onClick={() => setHourMode('custom')}
+              >
+                Custom
+              </button>
+            </div>
+
+            {/* Custom hour selectors — only visible when mode is 'custom' */}
+            {hourMode === 'custom' && (
+              <div className="wt-hour-custom-selectors">
+                <label className="wt-hour-custom-label">
+                  From
+                  <select
+                    className="wt-hour-select"
+                    value={customStart}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setCustomStart(val);
+                      if (val > customEnd) setCustomEnd(val);
+                    }}
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>{fmtHour(h + 1)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="wt-hour-custom-label">
+                  To
+                  <select
+                    className="wt-hour-select"
+                    value={customEnd}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setCustomEnd(val);
+                      if (val < customStart) setCustomStart(val);
+                    }}
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>{fmtHour(h + 1)}</option>
+                    ))}
+                  </select>
+                </label>
+                <span className="wt-hour-custom-summary">
+                  {activeEnd - activeStart + 1}h window
+                </span>
+              </div>
+            )}
+
+            {/* Active range display */}
+            <span className="wt-hour-range-display">
+              {fmtHour(activeStart + 1)} – {fmtHour(activeEnd + 1)}
+            </span>
+
+            {/* Logbook lock notice */}
+            {isLogbook && (
+              <span className="wt-hour-range-locked" title="Logbook uses a dual AM/PM ring structure that requires all 24 hours to render correctly.">
+                🔒 Logbook locked to 24h
+              </span>
+            )}
+
+          </div>
+        )}
+
         {/* Input tab */}
         {activeTab === 'input' && (
           <div className="wt-input-wrapper">
@@ -195,13 +313,18 @@ export default function WeatherTool() {
                   <ReportView data={weatherData} contractInfo={contractInfo} />
                 </div>
               ) : activeTab === 'standard-format' ? (
-                <StandardFormatView data={weatherData} contractInfo={contractInfo} />
+                <StandardFormatView
+                  data={weatherData}
+                  contractInfo={contractInfo}
+                  hourRange={hourRange}
+                />
               ) : (
                 <div className="wt-a4-landscape">
                   <ChartLayout
                     data={weatherData}
                     contractInfo={contractInfo}
                     variant={activeTab === 'logbook' ? 'logbook' : 'standard'}
+                    hourRange={hourRange}
                   />
                 </div>
               )}

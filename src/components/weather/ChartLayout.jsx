@@ -6,13 +6,27 @@ import { LogbookPie } from './LogbookPie';
 
 const DEFAULT_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Department_of_Public_Works_and_Highways_%28DPWH%29.svg/1280px-Department_of_Public_Works_and_Highways_%28DPWH%29.svg.png?20260123161510';
 
-export function ChartLayout({ data, contractInfo, variant = 'standard' }) {
+// ── Format an hour number as display label ────────────────────────────────────
+function fmtHour(h) {
+  if (h === 0)  return '12 AM';
+  if (h === 12) return '12 PM';
+  if (h === 24) return '12 AM';
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
+}
+
+export function ChartLayout({ data, contractInfo, variant = 'standard', hourRange }) {
   const days = Array.from({ length: DAYS_IN_MONTH }, (_, i) => i + 1);
 
   const PieComponent    = variant === 'logbook' ? LogbookPie : DayPie;
   const title           = variant === 'logbook' ? 'LOGBOOK WEATHER CHART' : 'WEATHER CHART';
   const currentColors   = variant === 'logbook' ? LOGBOOK_WEATHER_COLORS : WEATHER_COLORS;
   const currentLabels   = variant === 'logbook' ? LOGBOOK_WEATHER_LABELS : WEATHER_LABELS;
+
+  // ── Build the range label shown in the title bar ──────────────────────────
+  const isFullDay   = !hourRange || (hourRange.start === 0 && hourRange.end === 23);
+  const rangeLabel  = isFullDay
+    ? ''
+    : ` — ${fmtHour(hourRange.start)} to ${fmtHour(hourRange.end, true)}`;
 
   return (
     <div className="wt-chart-root">
@@ -48,7 +62,7 @@ export function ChartLayout({ data, contractInfo, variant = 'standard' }) {
 
       {/* TITLE BAR */}
       <div className="wt-chart-title-bar">
-        <span>{title}</span>
+        <span>{title}{rangeLabel}</span>
       </div>
 
       {/* 7x5 MAIN GRID */}
@@ -57,7 +71,7 @@ export function ChartLayout({ data, contractInfo, variant = 'standard' }) {
           <div key={day} className="wt-grid-cell">
             <div className="wt-day-label-overlay">Day {day}</div>
             <div className="wt-pie-wrapper">
-              <PieComponent dayNumber="" hourlyData={data[day - 1]} />
+<PieComponent dayNumber="" hourlyData={data[day - 1]} hourRange={hourRange} />
             </div>
           </div>
         ))}

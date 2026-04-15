@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { LOGBOOK_WEATHER_COLORS } from '../../constants/weatherConstants';
 
-export function LogbookPie({ hourlyData = [] }) {
+export function LogbookPie({ hourlyData = [], hourRange }) {
   const radius = 50;
   const center = 50;
   const innerRadius = 15;
@@ -23,8 +23,13 @@ export function LogbookPie({ hourlyData = [] }) {
       const c2 = Math.cos(endRad);
       const s2 = Math.sin(endRad);
 
-      const valOuter = hourlyData[i] || 0;
-      const valInner = hourlyData[i + 12] || 0;
+// ── Mask out-of-range segments per ring ──────────────────────────────────
+      const outerIdx = i;
+      const innerIdx = i + 12;
+      const outerInRange = !hourRange || (outerIdx >= hourRange.start && outerIdx <= hourRange.end);
+      const innerInRange = !hourRange || (innerIdx >= hourRange.start && innerIdx <= hourRange.end);
+      const valOuter = outerInRange ? (hourlyData[outerIdx] || 0) : 0;
+      const valInner = innerInRange ? (hourlyData[innerIdx] || 0) : 0;
 
       const dInner = `
         M ${center + innerRadius * c1},${center + innerRadius * s1}
@@ -44,8 +49,8 @@ export function LogbookPie({ hourlyData = [] }) {
         Z
       `;
 
-      segs.push({ d: dOuter, value: valOuter });
-      segs.push({ d: dInner, value: valInner });
+      segs.push({ d: dOuter, value: valOuter, inRange: outerInRange });
+      segs.push({ d: dInner, value: valInner, inRange: innerInRange });
     }
     return segs;
   }, [hourlyData]);
@@ -56,11 +61,11 @@ export function LogbookPie({ hourlyData = [] }) {
       style={{ width: '100%', height: '100%' }}
       preserveAspectRatio="xMidYMid meet"
     >
-      {segments.map((seg, idx) => (
+{segments.map((seg, idx) => (
         <path
           key={idx}
           d={seg.d}
-          fill={LOGBOOK_WEATHER_COLORS[seg.value] || 'white'}
+          fill={seg.inRange ? (LOGBOOK_WEATHER_COLORS[seg.value] || 'white') : '#e5e7eb'}
           stroke="#000"
           strokeWidth="0.5"
         />

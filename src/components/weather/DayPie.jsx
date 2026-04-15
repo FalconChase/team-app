@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { HOURS_IN_DAY, WEATHER_COLORS } from '../../constants/weatherConstants';
 
-export function DayPie({ hourlyData = [] }) {
+export function DayPie({ hourlyData = [], hourRange }) {
   const radius = 50;
   const center = 50;
   const innerRadius = 15;
@@ -23,12 +23,17 @@ export function DayPie({ hourlyData = [] }) {
       const y2 = center + radius * Math.sin(endRad);
 
       const d = `M ${center},${center} L ${x1},${y1} A ${radius},${radius} 0 0,1 ${x2},${y2} Z`;
-      const val = hourlyData[i] || 0;
 
-      segs.push({ d, value: val });
+      // ── Mask out-of-range segments — white if outside selected hour window ──
+      const inRange = !hourRange || (i >= hourRange.start && i <= hourRange.end);
+      const val = inRange ? (hourlyData[i] || 0) : 0;
+
+      segs.push({ d, value: val, inRange });
     }
     return segs;
-  }, [hourlyData]);
+  }, [hourlyData, hourRange]);
+
+  console.log('DayPie hourRange:', hourRange, 'out-of-range count:', segments.filter(s => !s.inRange).length);
 
   return (
     <svg
@@ -40,7 +45,7 @@ export function DayPie({ hourlyData = [] }) {
         <path
           key={idx}
           d={seg.d}
-          fill={WEATHER_COLORS[seg.value] || 'white'}
+          fill={seg.inRange ? (WEATHER_COLORS[seg.value] || 'white') : '#e5e7eb'}
           stroke="#000"
           strokeWidth="0.5"
         />

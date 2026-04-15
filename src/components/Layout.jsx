@@ -19,6 +19,7 @@ export default function Layout({ children }) {
   const { team, pendingRequests, isAdmin } = useTeam();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("sidebarOpen") !== "false");
 
   async function handleLogout() {
     await logout();
@@ -32,17 +33,21 @@ export default function Layout({ children }) {
     shell: { display: "flex", flexDirection: "row", minHeight: "100vh", fontFamily: "Tahoma, Geneva, sans-serif", background: "#f4f6f9" },
 
     // ── Sidebar ──────────────────────────────────────────────────────────
-    sidebar: { width: "200px", minWidth: "200px", background: "#0f2440", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", zIndex: 100, boxSizing: "border-box" },
-    sidebarHeader: { padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" },
-    logo: { color: "#fff", fontSize: "13px", fontWeight: "600", letterSpacing: "1.5px" },
-    logosub: { color: "#7ab3e0", fontSize: "9px", display: "block", fontWeight: "400", letterSpacing: "0.3px", marginTop: "2px" },
-    navList: { flex: 1, padding: "8px 0", overflowY: "auto" },
+    sidebar: { width: sidebarOpen ? "200px" : "0px", minWidth: sidebarOpen ? "200px" : "0px", background: "#0f2440", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", zIndex: 100, boxSizing: "border-box", overflow: "hidden", transition: "width 0.22s ease, min-width 0.22s ease" },
+    sidebarHeader: { padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", minWidth: "200px" },
+    logo: { color: "#fff", fontSize: "13px", fontWeight: "600", letterSpacing: "1.5px", whiteSpace: "nowrap" },
+    logosub: { color: "#7ab3e0", fontSize: "9px", display: "block", fontWeight: "400", letterSpacing: "0.3px", marginTop: "2px", whiteSpace: "nowrap" },
+    navList: { flex: 1, padding: "8px 0", overflowY: "auto", minWidth: "200px" },
     navLink: { color: "rgba(255,255,255,0.55)", fontSize: "12px", padding: "9px 16px", textDecoration: "none", display: "flex", alignItems: "center", gap: "9px", whiteSpace: "nowrap", transition: "color 0.15s, background 0.15s", borderLeft: "3px solid transparent", boxSizing: "border-box" },
     pendingBadge: { background: "#e24b4a", color: "#fff", fontSize: "9px", borderRadius: "50%", width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: "auto" },
 
     // ── Right column (topbar + main) ─────────────────────────────────────
     rightCol: { display: "flex", flexDirection: "column", flex: 1, minWidth: 0 },
     topbar: { background: "#1a3a5c", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", height: "52px", position: "sticky", top: 0, zIndex: 99 },
+    topLeft: { display: "flex", alignItems: "center", gap: "12px" },
+    toggleBtn: { background: "none", border: "none", cursor: "pointer", padding: "6px 8px", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "center", justifyContent: "center" },
+    toggleBar: { width: "18px", height: "2px", background: "rgba(255,255,255,0.7)", borderRadius: "2px", display: "block", transition: "background 0.15s" },
+    divisionLabel: { color: "#7ab3e0", fontSize: "11px", letterSpacing: "0.4px", whiteSpace: "nowrap" },
     topRight: { display: "flex", alignItems: "center", gap: "12px" },
     userChip: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.12)", borderRadius: "20px", padding: "4px 12px 4px 4px", cursor: "pointer", position: "relative" },
     avatar: { width: "28px", height: "28px", borderRadius: "50%", background: "#7ab3e0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "600", color: "#1a3a5c" },
@@ -94,9 +99,16 @@ export default function Layout({ children }) {
 
         {/* Slim topbar */}
         <div style={s.topbar}>
-          <div style={{ color: "#7ab3e0", fontSize: "11px", letterSpacing: "0.4px" }}>
-            CD — ALA
+          <div style={s.topLeft}>
+            {/* Hamburger toggle */}
+            <button style={s.toggleBtn} onClick={() => setSidebarOpen(o => { localStorage.setItem("sidebarOpen", !o); return !o; })} title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
+              <span style={s.toggleBar} />
+              <span style={s.toggleBar} />
+              <span style={s.toggleBar} />
+            </button>
+            <span style={s.divisionLabel}>CD — ALA</span>
           </div>
+
           <div style={s.topRight}>
             {isAdmin() && pendingRequests.length > 0 && (
               <div style={{ fontSize: "11px", background: "#e24b4a", color: "#fff", borderRadius: "12px", padding: "3px 10px", cursor: "pointer" }} onClick={() => navigate("/members")}>

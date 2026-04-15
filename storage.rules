@@ -1,7 +1,6 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-
     // Team logo — only admin-tier roles can upload, anyone authenticated can read
     match /appSettings/logo {
       allow read: if request.auth != null;
@@ -9,7 +8,6 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
           in ['admin', 'owner', 'manager', 'supervisor'];
     }
-
     // Per-user uploads — owner can write their own, any member can read (view/copy only)
     match /users/{userId}/{allPaths=**} {
       allow read: if request.auth != null;
@@ -18,11 +16,18 @@ service firebase.storage {
          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
            in ['admin', 'owner', 'manager', 'supervisor']);
     }
-
+    // Member file uploads via My Files modal
+    // Path: memberFiles/{userId}/{folderId}/{filename}
+    match /memberFiles/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+        (request.auth.uid == userId ||
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+           in ['admin', 'owner', 'manager', 'supervisor']);
+    }
     // Deny everything else by default
     match /{allPaths=**} {
       allow read, write: if false;
     }
-
   }
 }

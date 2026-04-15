@@ -29,19 +29,26 @@ export default function Layout({ children }) {
   const roleLabel = { owner: "Admin", admin: "Admin", manager: "Manager", supervisor: "Supervisor", member: "Member" };
 
   const s = {
-    shell: { display: "flex", flexDirection: "column", minHeight: "100vh", fontFamily: "Tahoma, Geneva, sans-serif", background: "#f4f6f9" },
-    topbar: { background: "#1a3a5c", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", height: "52px", position: "sticky", top: 0, zIndex: 100 },
-    logo: { color: "#fff", fontSize: "15px", fontWeight: "600", letterSpacing: "1.5px" },
-    logosub: { color: "#7ab3e0", fontSize: "10px", display: "block", fontWeight: "400", letterSpacing: "0.3px" },
+    shell: { display: "flex", flexDirection: "row", minHeight: "100vh", fontFamily: "Tahoma, Geneva, sans-serif", background: "#f4f6f9" },
+
+    // ── Sidebar ──────────────────────────────────────────────────────────
+    sidebar: { width: "200px", minWidth: "200px", background: "#0f2440", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", zIndex: 100, boxSizing: "border-box" },
+    sidebarHeader: { padding: "18px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" },
+    logo: { color: "#fff", fontSize: "13px", fontWeight: "600", letterSpacing: "1.5px" },
+    logosub: { color: "#7ab3e0", fontSize: "9px", display: "block", fontWeight: "400", letterSpacing: "0.3px", marginTop: "2px" },
+    navList: { flex: 1, padding: "8px 0", overflowY: "auto" },
+    navLink: { color: "rgba(255,255,255,0.55)", fontSize: "12px", padding: "9px 16px", textDecoration: "none", display: "flex", alignItems: "center", gap: "9px", whiteSpace: "nowrap", transition: "color 0.15s, background 0.15s", borderLeft: "3px solid transparent", boxSizing: "border-box" },
+    pendingBadge: { background: "#e24b4a", color: "#fff", fontSize: "9px", borderRadius: "50%", width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: "auto" },
+
+    // ── Right column (topbar + main) ─────────────────────────────────────
+    rightCol: { display: "flex", flexDirection: "column", flex: 1, minWidth: 0 },
+    topbar: { background: "#1a3a5c", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", height: "52px", position: "sticky", top: 0, zIndex: 99 },
     topRight: { display: "flex", alignItems: "center", gap: "12px" },
     userChip: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.12)", borderRadius: "20px", padding: "4px 12px 4px 4px", cursor: "pointer", position: "relative" },
     avatar: { width: "28px", height: "28px", borderRadius: "50%", background: "#7ab3e0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "600", color: "#1a3a5c" },
     userName: { color: "#fff", fontSize: "12px" },
     rolePill: { fontSize: "9px", padding: "2px 7px", borderRadius: "10px", fontWeight: "600" },
-    navRow: { background: "#0f2540", display: "flex", padding: "0 16px", overflowX: "auto", borderBottom: "1px solid rgba(255,255,255,0.08)" },
-    navLink: { color: "rgba(255,255,255,0.55)", fontSize: "12px", padding: "10px 14px", textDecoration: "none", borderBottom: "2px solid transparent", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px", transition: "color 0.15s" },
     main: { flex: 1, padding: "20px", maxWidth: "1100px", width: "100%", margin: "0 auto", boxSizing: "border-box" },
-    pendingBadge: { background: "#e24b4a", color: "#fff", fontSize: "9px", borderRadius: "50%", width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: "4px" },
     dropdown: { position: "absolute", top: "36px", right: 0, background: "#fff", borderRadius: "8px", border: "1px solid #e0e8f0", boxShadow: "0 4px 16px rgba(0,0,0,0.15)", minWidth: "160px", zIndex: 200 },
     dropItem: { padding: "10px 16px", fontSize: "12px", color: "#1a3a5c", cursor: "pointer", display: "block", width: "100%", textAlign: "left", background: "none", border: "none", fontFamily: "Tahoma, Geneva, sans-serif" }
   };
@@ -50,53 +57,78 @@ export default function Layout({ children }) {
 
   return (
     <div style={s.shell}>
-      <div style={s.topbar}>
-        <div style={s.logo}>
-          TEAM APP
-          <span style={s.logosub}>{team?.department || "Loading..."} — {team?.name || ""}</span>
-        </div>
-        <div style={s.topRight}>
-          {isAdmin() && pendingRequests.length > 0 && (
-            <div style={{ fontSize: "11px", background: "#e24b4a", color: "#fff", borderRadius: "12px", padding: "3px 10px", cursor: "pointer" }} onClick={() => navigate("/members")}>
-              {pendingRequests.length} pending request{pendingRequests.length > 1 ? "s" : ""}
-            </div>
-          )}
-          <div style={{ position: "relative" }}>
-            <div style={s.userChip} onClick={() => setMenuOpen(o => !o)}>
-              <div style={s.avatar}>{initials}</div>
-              <span style={s.userName}>{userProfile?.displayName?.split(" ")[0] || "User"}</span>
-              <span style={{ ...s.rolePill, background: roleColor[userProfile?.role] || "#aaa", color: userProfile?.role === "member" ? "#333" : "#fff" }}>
-                {roleLabel[userProfile?.role] || "Member"}
-              </span>
-            </div>
-            {menuOpen && (
-              <div style={s.dropdown} onClick={() => setMenuOpen(false)}>
-                <div style={{ padding: "10px 16px 6px", borderBottom: "1px solid #eee" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#1a3a5c" }}>{userProfile?.displayName}</div>
-                  <div style={{ fontSize: "11px", color: "#888" }}>@{userProfile?.username}</div>
-                </div>
-                <button style={s.dropItem} onClick={() => navigate(`/members/${userProfile?.uid}`)}>My Profile & Files</button>
-                {isAdmin() && <button style={s.dropItem} onClick={() => navigate("/settings")}>Team Settings</button>}
-                <button style={{ ...s.dropItem, color: "#a32d2d", borderTop: "1px solid #eee" }} onClick={handleLogout}>Sign Out</button>
-              </div>
-            )}
+
+      {/* ── Sidebar ── */}
+      <div style={s.sidebar}>
+        <div style={s.sidebarHeader}>
+          <div style={s.logo}>
+            TEAM APP
+            <span style={s.logosub}>{team?.department || "Loading..."} — {team?.name || ""}</span>
           </div>
         </div>
+        <nav style={s.navList}>
+          {NAV.map(n => (
+            <NavLink
+              key={n.path}
+              to={n.path}
+              end={n.path === "/"}
+              style={({ isActive }) => ({
+                ...s.navLink,
+                color: isActive ? "#fff" : "rgba(255,255,255,0.55)",
+                borderLeftColor: isActive ? "#378ADD" : "transparent",
+                background: isActive ? "rgba(55,138,221,0.12)" : "transparent",
+              })}
+            >
+              <span style={{ fontSize: "14px" }}>{n.icon}</span>
+              {n.label}
+              {n.path === "/members" && isAdmin() && pendingRequests.length > 0 && (
+                <span style={s.pendingBadge}>{pendingRequests.length}</span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
       </div>
 
-      <div style={s.navRow}>
-        {NAV.map(n => (
-          <NavLink key={n.path} to={n.path} end={n.path === "/"} style={({ isActive }) => ({ ...s.navLink, color: isActive ? "#fff" : "rgba(255,255,255,0.55)", borderBottomColor: isActive ? "#7ab3e0" : "transparent" })}>
-            <span style={{ fontSize: "14px" }}>{n.icon}</span>
-            {n.label}
-            {n.path === "/members" && isAdmin() && pendingRequests.length > 0 && (
-              <span style={s.pendingBadge}>{pendingRequests.length}</span>
+      {/* ── Right column ── */}
+      <div style={s.rightCol}>
+
+        {/* Slim topbar */}
+        <div style={s.topbar}>
+          <div style={{ color: "#7ab3e0", fontSize: "11px", letterSpacing: "0.4px" }}>
+            CD — ALA
+          </div>
+          <div style={s.topRight}>
+            {isAdmin() && pendingRequests.length > 0 && (
+              <div style={{ fontSize: "11px", background: "#e24b4a", color: "#fff", borderRadius: "12px", padding: "3px 10px", cursor: "pointer" }} onClick={() => navigate("/members")}>
+                {pendingRequests.length} pending request{pendingRequests.length > 1 ? "s" : ""}
+              </div>
             )}
-          </NavLink>
-        ))}
+            <div style={{ position: "relative" }}>
+              <div style={s.userChip} onClick={() => setMenuOpen(o => !o)}>
+                <div style={s.avatar}>{initials}</div>
+                <span style={s.userName}>{userProfile?.displayName?.split(" ")[0] || "User"}</span>
+                <span style={{ ...s.rolePill, background: roleColor[userProfile?.role] || "#aaa", color: userProfile?.role === "member" ? "#333" : "#fff" }}>
+                  {roleLabel[userProfile?.role] || "Member"}
+                </span>
+              </div>
+              {menuOpen && (
+                <div style={s.dropdown} onClick={() => setMenuOpen(false)}>
+                  <div style={{ padding: "10px 16px 6px", borderBottom: "1px solid #eee" }}>
+                    <div style={{ fontSize: "12px", fontWeight: "600", color: "#1a3a5c" }}>{userProfile?.displayName}</div>
+                    <div style={{ fontSize: "11px", color: "#888" }}>@{userProfile?.username}</div>
+                  </div>
+                  <button style={s.dropItem} onClick={() => navigate(`/members/${userProfile?.uid}`)}>My Profile & Files</button>
+                  {isAdmin() && <button style={s.dropItem} onClick={() => navigate("/settings")}>Team Settings</button>}
+                  <button style={{ ...s.dropItem, color: "#a32d2d", borderTop: "1px solid #eee" }} onClick={handleLogout}>Sign Out</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <main style={s.main}>{children}</main>
       </div>
 
-      <main style={s.main}>{children}</main>
     </div>
   );
 }

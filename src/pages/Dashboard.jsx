@@ -723,6 +723,7 @@ export default function Dashboard() {
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterProj,   setFilterProj]   = useState("All");
   const [filterMember, setFilterMember] = useState("All");
+  const [filterSubjectType, setFilterSubjectType] = useState("All");
   const [sortOrder,    setSortOrder]    = useState("none");
 
   const [tooltip,            setTooltip]           = useState(null);
@@ -775,13 +776,28 @@ export default function Dashboard() {
 
   const assignedMemberIds = [...new Set(documents.map((d) => d.assignedTo).filter(Boolean))];
   const assignedMembers   = (members || []).filter((m) => assignedMemberIds.includes(m.uid || m.id));
-
+function getSubjectTypePrefix(subjectType) {
+  if (!subjectType) return null;
+  return subjectType.replace(/[\s#\-_]?\d+$/i, "").trim().toUpperCase();
+}
+const subjectTypePrefixes = [
+  ...new Set(
+    documents
+      .map((d) => getSubjectTypePrefix(d.subjectType))
+      .filter(Boolean)
+  ),
+].sort();
   const filtered = documents
     .filter((d) =>
       (filterStatus === "All" || d.status    === filterStatus) &&
       (filterMember === "All" || d.assignedTo === filterMember)
     )
     .filter((d) => filterProj === "All" || d.projectId === filterProj)
+    // SURGICAL ADD: subject type prefix filter
+    .filter((d) =>
+      filterSubjectType === "All" ||
+      getSubjectTypePrefix(d.subjectType) === filterSubjectType
+    )
     .sort((a, b) => {
       if (sortOrder === "asc" || sortOrder === "desc") {
         const pA = projects.find((p) => p.id === a.projectId);
@@ -1099,6 +1115,13 @@ export default function Dashboard() {
         <select style={S.select} value={filterProj} onChange={(e) => setFilterProj(e.target.value)}>
           <option value="All">All Projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.projectId || p.id}</option>)}
+        </select>
+                {/* SURGICAL ADD: Subject Type filter */}
+        <select style={S.select} value={filterSubjectType} onChange={(e) => setFilterSubjectType(e.target.value)}>
+          <option value="All">All Subject Types</option>
+          {subjectTypePrefixes.map((prefix) => (
+            <option key={prefix} value={prefix}>{prefix}</option>
+          ))}
         </select>
         <select style={S.select} value={filterMember} onChange={(e) => setFilterMember(e.target.value)}>
           <option value="All">All Members</option>

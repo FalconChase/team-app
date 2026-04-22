@@ -390,7 +390,7 @@ function ReminderItem({ item, onToggle, onDelete }) {
 function PersonalReminders({ uid }) {
   const [items,     setItems]     = useState([]);
   const [inputText, setInputText] = useState("");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [loading,   setLoading]   = useState(true);
 
   useEffect(() => { ensureReminderDrainStyle(); }, []);
@@ -720,12 +720,19 @@ export default function Dashboard() {
   // SURGICAL ADD: stage visibility config per subject type
   const [stageConfig, setStageConfig] = useState({});
 
-  const [filterStatus, setFilterStatus] = useState("All");
-  const [filterProj,   setFilterProj]   = useState("All");
-  const [filterMember, setFilterMember] = useState("All");
-  const [filterSubjectType, setFilterSubjectType] = useState("All");
-  const [sortOrder,      setSortOrder]      = useState("none");
-  const [stageSortOrder, setStageSortOrder] = useState("none");
+  const [filterStatus,      setFilterStatus]      = useState(() => sessionStorage.getItem("dash_filterStatus")      || "All");
+  const [filterProj,        setFilterProj]        = useState(() => sessionStorage.getItem("dash_filterProj")        || "All");
+  const [filterMember,      setFilterMember]      = useState(() => sessionStorage.getItem("dash_filterMember")      || "All");
+  const [filterSubjectType, setFilterSubjectType] = useState(() => sessionStorage.getItem("dash_filterSubjectType") || "All");
+  const [sortOrder,         setSortOrder]         = useState(() => sessionStorage.getItem("dash_sortOrder")         || "none");
+  const [stageSortOrder,    setStageSortOrder]    = useState(() => sessionStorage.getItem("dash_stageSortOrder")    || "none");
+  
+  useEffect(() => { sessionStorage.setItem("dash_filterStatus",      filterStatus);      }, [filterStatus]);
+  useEffect(() => { sessionStorage.setItem("dash_filterProj",        filterProj);        }, [filterProj]);
+  useEffect(() => { sessionStorage.setItem("dash_filterMember",      filterMember);      }, [filterMember]);
+  useEffect(() => { sessionStorage.setItem("dash_filterSubjectType", filterSubjectType); }, [filterSubjectType]);
+  useEffect(() => { sessionStorage.setItem("dash_sortOrder",         sortOrder);         }, [sortOrder]);
+  useEffect(() => { sessionStorage.setItem("dash_stageSortOrder",    stageSortOrder);    }, [stageSortOrder]);
 
   const [tooltip,            setTooltip]           = useState(null);
   const [showPrintModal,     setShowPrintModal]    = useState(false);

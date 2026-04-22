@@ -724,7 +724,8 @@ export default function Dashboard() {
   const [filterProj,   setFilterProj]   = useState("All");
   const [filterMember, setFilterMember] = useState("All");
   const [filterSubjectType, setFilterSubjectType] = useState("All");
-  const [sortOrder,    setSortOrder]    = useState("none");
+  const [sortOrder,      setSortOrder]      = useState("none");
+  const [stageSortOrder, setStageSortOrder] = useState("none");
 
   const [tooltip,            setTooltip]           = useState(null);
   const [showPrintModal,     setShowPrintModal]    = useState(false);
@@ -798,6 +799,7 @@ const subjectTypePrefixes = [
       filterSubjectType === "All" ||
       getSubjectTypePrefix(d.subjectType) === filterSubjectType
     )
+    // AFTER
     .sort((a, b) => {
       if (sortOrder === "asc" || sortOrder === "desc") {
         const pA = projects.find((p) => p.id === a.projectId);
@@ -806,6 +808,16 @@ const subjectTypePrefixes = [
         const lB = (pB?.projectId || b.projectId || "").toUpperCase();
         const c  = lA.localeCompare(lB, undefined, { numeric: true, sensitivity: "base" });
         return sortOrder === "asc" ? c : -c;
+      }
+      if (stageSortOrder === "asc" || stageSortOrder === "desc") {
+        const visA = getVisibleStatuses(a.subjectType, statuses, stageConfig);
+        const visB = getVisibleStatuses(b.subjectType, statuses, stageConfig);
+        const idxA = visA.indexOf(a.status);
+        const idxB = visB.indexOf(b.status);
+        const iA   = idxA === -1 ? 9999 : idxA;
+        const iB   = idxB === -1 ? 9999 : idxB;
+        const c    = iA - iB;
+        return stageSortOrder === "asc" ? c : -c;
       }
       const tsA = a.lastModifiedAt?.toMillis?.() || a.lastUpdatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
       const tsB = b.lastModifiedAt?.toMillis?.() || b.lastUpdatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
@@ -1108,10 +1120,18 @@ const subjectTypePrefixes = [
       </div>
 
       <div style={S.filters}>
-        <select style={S.select} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+               <select style={S.select} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="All">All Statuses</option>
           {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
+        {/* SURGICAL ADD: Stage sort toggle */}
+        <button
+          style={S.sortBtn(stageSortOrder !== "none")}
+          onClick={() => setStageSortOrder((prev) => prev === "none" ? "asc" : prev === "asc" ? "desc" : "none")}
+          title={stageSortOrder === "none" ? "Sort by stage" : stageSortOrder === "asc" ? "Stage: earliest first — click for latest first" : "Stage: latest first — click to clear"}
+        >
+          Stage {stageSortOrder === "asc" ? "↑" : stageSortOrder === "desc" ? "↓" : "↕"}
+        </button>
         <select style={S.select} value={filterProj} onChange={(e) => setFilterProj(e.target.value)}>
           <option value="All">All Projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.projectId || p.id}</option>)}

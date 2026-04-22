@@ -447,7 +447,7 @@ function MemberManagementSection({ members, currentUser, grantAdmin, revokeAdmin
         const isSelf    = m.uid === currentUser?.uid || m.id === currentUser?.uid;
         const isOwner   = m.role === "owner";
         const isAdm     = m.role === "admin" || m.role === "owner" || m.role === "supervisor";
-        const badgeRole = isOwner ? "admin" : (m.role || "member");
+        const badgeRole = isOwner ? "Admin I" : (m.role || "member");
 
         return (
           <div key={m.id || m.uid} style={S.memberRow}>

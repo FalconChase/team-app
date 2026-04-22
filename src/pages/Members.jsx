@@ -9,6 +9,7 @@ const avatarColors = ["#e6f1fb","#eaf3de","#faeeda","#fcebeb","#e1f5ee","#f0e8fb
 const avatarText   = ["#185fa5","#3b6d11","#854f0b","#a32d2d","#0f6e56","#5c2d96"];
 const colorIdx = (name) => (name?.charCodeAt(0) || 0) % avatarColors.length;
 const initials = (name) => name?.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "?";
+const displayRole = (role) => role === "owner" ? "Admin I" : (role || "member");
 
 function MemberFiles({ member, isOwner }) {
   const [folders,        setFolders]        = useState([]);
@@ -282,7 +283,7 @@ export default function Members() {
               <div style={s.avatar(m.displayName, false)}>{initials(m.displayName)}</div>
               <div>
                 <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)" }}>{m.displayName}</div>
-                <span style={s.rolePill(m.role)}>{m.role}</span>
+                <span style={s.rolePill(m.role)}>{displayRole(m.role)}</span>
               </div>
             </div>
             <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{m.designation || "No designation set"}</div>
@@ -302,7 +303,7 @@ export default function Members() {
                 <div style={s.avatar(selected.displayName, true)}>{initials(selected.displayName)}</div>
                 <div>
                   <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--text-primary)" }}>{selected.displayName}</div>
-                  <span style={s.rolePill(selected.role)}>{selected.role}</span>
+                  <span style={s.rolePill(selected.role)}>{displayRole(selected.role)}</span>
                   <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>@{selected.username}</div>
                 </div>
               </div>

@@ -574,10 +574,17 @@ export default function Logbook() {
   const firstDow         = getFirstDow(viewYear, viewMonth);
   const cells            = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
   const isCurrentMonth   = viewYear === todayYear && viewMonth === todayMonth;
-  // Merge weatherMap into dayData for stat counts: saved Logbook entries take priority
-  const mergedDayStats = { ...Object.fromEntries(
-    Object.entries(weatherMap).map(([k, snap]) => [k, { workable: snap.workable }])
-  ), ...dayData };
+  // Merge weatherMap + dayData for stats, mirroring cellColor fallback logic:
+  // dayData.workable takes priority only when explicitly defined; otherwise use weatherMap.
+  const mergedDayStats = {};
+  Object.entries(weatherMap).forEach(([k, snap]) => { mergedDayStats[k] = { workable: snap.workable }; });
+  Object.entries(dayData).forEach(([k, d]) => {
+    mergedDayStats[k] = {
+      ...mergedDayStats[k],
+      ...d,
+      workable: d.workable !== undefined ? d.workable : mergedDayStats[k]?.workable,
+    };
+  });
   const totalWorkable    = Object.values(mergedDayStats).filter(d => d.workable === true).length;
   const totalUnworkable  = Object.values(mergedDayStats).filter(d => d.workable === false).length;
   const daysWithAct      = Object.values(dayData).filter(d => d.activities?.length > 0).length;

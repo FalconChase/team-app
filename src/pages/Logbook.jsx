@@ -122,19 +122,19 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
 
       {/* Table */}
       {dataLoading ? (
-        <div style={{ textAlign: "center", color: "#7ab3e0", fontSize: "12px", padding: "40px 0" }}>Loading…</div>
+        <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: "12px", padding: "40px 0" }}>Loading…</div>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: "var(--font-family)" }}>
             <thead>
               <tr>
                 {["Date", "Weather", "Site Activities", "Status", "Remarks"].map(h => (
                   <th key={h} style={{
                     padding: "10px 12px", textAlign: "left", fontSize: "10px",
-                    fontWeight: "700", color: "#7ab3e0", textTransform: "uppercase",
-                    letterSpacing: "0.5px", background: "rgba(255,255,255,0.05)",
-                    borderBottom: "2px solid rgba(122,179,224,0.3)",
-                    borderRight: "1px solid rgba(122,179,224,0.1)",
+                    fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase",
+                    letterSpacing: "0.5px", background: "var(--bg-secondary)",
+                    borderBottom: "2px solid var(--border-main)",
+                    borderRight: "1px solid var(--border-light)",
                   }}>{h}</th>
                 ))}
               </tr>
@@ -145,27 +145,27 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                 const isWorkable   = workable === true;
                 const isEmpty      = workable === undefined;
                 const rowBg = isUnworkable
-                  ? "rgba(229,57,53,0.06)"
+                  ? `color-mix(in srgb, var(--danger) 6%, transparent)`
                   : isWorkable && actText
-                    ? "rgba(76,175,80,0.05)"
+                    ? `color-mix(in srgb, var(--success) 5%, transparent)`
                     : "transparent";
                 const reason = unworkableReason === "__other__"
                   ? otherReason
                   : unworkableReason;
                 return (
-                  <tr key={day} style={{ background: rowBg, borderBottom: "1px solid rgba(55,138,221,0.15)" }}>
-                    <td style={{ padding: "8px 12px", color: "#1a3a5c", whiteSpace: "nowrap", fontWeight: "700", width: "120px" }}>{dateLabel}</td>
-                    <td style={{ padding: "8px 12px", color: "#2a4a6a", width: "110px" }}>{weather || <span style={{ color: "#999", fontStyle: "italic" }}>—</span>}</td>
-                    <td style={{ padding: "8px 12px", color: "#1a3a5c", lineHeight: "1.5" }}>{actText || <span style={{ color: "#999", fontStyle: "italic" }}>No activities logged</span>}</td>
+                  <tr key={day} style={{ background: rowBg, borderBottom: "1px solid var(--border-light)" }}>
+                    <td style={{ padding: "8px 12px", color: "var(--text-primary)", whiteSpace: "nowrap", fontWeight: "700", width: "120px" }}>{dateLabel}</td>
+                    <td style={{ padding: "8px 12px", color: "var(--text-secondary)", width: "110px" }}>{weather || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}</td>
+                    <td style={{ padding: "8px 12px", color: "var(--text-primary)", lineHeight: "1.5" }}>{actText || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No activities logged</span>}</td>
                     <td style={{ padding: "8px 12px", whiteSpace: "nowrap", width: "110px" }}>
                       {isEmpty
-                        ? <span style={{ color: "#999", fontStyle: "italic" }}>—</span>
+                        ? <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>
                         : isWorkable
                           ? <span className="status-w" style={{ color: GREEN, fontWeight: "600" }}>✓ Workable</span>
                           : <span className="status-u" style={{ color: RED,   fontWeight: "600" }}>✕ Unworkable</span>
                       }
                     </td>
-                    <td style={{ padding: "8px 12px", color: "#4a6a8a", fontSize: "11px" }}>{isUnworkable ? reason : ""}</td>
+                    <td style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: "11px" }}>{isUnworkable ? reason : ""}</td>
                   </tr>
                 );
               })}
@@ -177,12 +177,12 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
       {/* Legend — hidden on print */}
       <div className="no-print" style={{ display: "flex", gap: "16px", marginTop: "14px", flexWrap: "wrap" }}>
         {[
-          { c: GREEN,   l: "Workable with activities"  },
-          { c: "#f9a825", l: "Workable, no activities" },
-          { c: RED,     l: "Unworkable"                },
-          { c: "#555",  l: "No entry yet"              },
+          { c: GREEN,                l: "Workable with activities"  },
+          { c: "var(--warning)",     l: "Workable, no activities"   },
+          { c: RED,                  l: "Unworkable"                },
+          { c: "var(--text-muted)",  l: "No entry yet"              },
         ].map(({ c, l }) => (
-          <div key={l} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "#7ab3e0" }}>
+          <div key={l} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--text-muted)" }}>
             <div style={{ width: "10px", height: "10px", borderRadius: "3px", background: c }} />
             {l}
           </div>

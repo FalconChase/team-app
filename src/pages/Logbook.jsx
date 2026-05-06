@@ -136,19 +136,19 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                   ? otherReason
                   : unworkableReason;
                 return (
-                  <tr key={day} style={{ background: rowBg, borderBottom: "1px solid rgba(122,179,224,0.1)" }}>
-                    <td style={{ padding: "8px 12px", color: "#e8edf5", whiteSpace: "nowrap", fontWeight: "600", width: "120px" }}>{dateLabel}</td>
-                    <td style={{ padding: "8px 12px", color: "#ccc", width: "110px" }}>{weather || <span style={{ color: "#555", fontStyle: "italic" }}>—</span>}</td>
-                    <td style={{ padding: "8px 12px", color: "#e8edf5", lineHeight: "1.5" }}>{actText || <span style={{ color: "#555", fontStyle: "italic" }}>No activities logged</span>}</td>
+                  <tr key={day} style={{ background: rowBg, borderBottom: "1px solid rgba(55,138,221,0.15)" }}>
+                    <td style={{ padding: "8px 12px", color: "#1a3a5c", whiteSpace: "nowrap", fontWeight: "700", width: "120px" }}>{dateLabel}</td>
+                    <td style={{ padding: "8px 12px", color: "#2a4a6a", width: "110px" }}>{weather || <span style={{ color: "#999", fontStyle: "italic" }}>—</span>}</td>
+                    <td style={{ padding: "8px 12px", color: "#1a3a5c", lineHeight: "1.5" }}>{actText || <span style={{ color: "#999", fontStyle: "italic" }}>No activities logged</span>}</td>
                     <td style={{ padding: "8px 12px", whiteSpace: "nowrap", width: "110px" }}>
                       {isEmpty
-                        ? <span style={{ color: "#555", fontStyle: "italic" }}>—</span>
+                        ? <span style={{ color: "#999", fontStyle: "italic" }}>—</span>
                         : isWorkable
                           ? <span className="status-w" style={{ color: GREEN, fontWeight: "600" }}>✓ Workable</span>
                           : <span className="status-u" style={{ color: RED,   fontWeight: "600" }}>✕ Unworkable</span>
                       }
                     </td>
-                    <td style={{ padding: "8px 12px", color: "#aaa", fontSize: "11px" }}>{isUnworkable ? reason : ""}</td>
+                    <td style={{ padding: "8px 12px", color: "#4a6a8a", fontSize: "11px" }}>{isUnworkable ? reason : ""}</td>
                   </tr>
                 );
               })}

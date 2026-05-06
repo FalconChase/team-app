@@ -8,11 +8,11 @@ import {
 } from "firebase/firestore";
 import { isUnworkable, getWeatherDescription } from "../utils/weatherLogic";
 
-const ACCENT = "#378ADD";
-const CARD   = "#1a3a5c";
-const GREEN  = "#4caf50";
-const YELLOW = "#f9a825";
-const RED    = "#e53935";
+const ACCENT = "var(--primary)";
+const CARD   = "var(--bg-card)";
+const GREEN  = "var(--success)";
+const YELLOW = "var(--warning)";
+const RED    = "var(--danger)";
 
 const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTH_NAMES  = [
@@ -61,7 +61,7 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
       #logbook-overview-print th, #logbook-overview-print td { border: 1px solid #333; padding: 4px 6px; text-align: left; vertical-align: top; }
       #logbook-overview-print th { background: #e8edf5 !important; -webkit-print-color-adjust: exact; font-weight: 700; font-size: 8pt; }
       #logbook-overview-print .print-header { display: block !important; margin-bottom: 14px; font-family: Arial, sans-serif; border-bottom: 2px solid #333; padding-bottom: 8px; }
-      #logbook-overview-print .print-header h1 { font-size: 16pt; font-weight: 700; margin: 0 0 6px; letter-spacing: 1px; text-transform: uppercase; }
+      #logbook-overview-print .print-header h1 { font-size: 16pt; font-weight: 700; margin: 0 0 6px; letter-spacing: 1px; text-transform: uppercase; color: #111}
       #logbook-overview-print .print-header .meta { display: flex; gap: 32px; font-size: 9pt; margin: 0; }
       #logbook-overview-print .print-header .meta-item { display: flex; flex-direction: column; }
       #logbook-overview-print .print-header .meta-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
@@ -72,10 +72,10 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
     }
   `;
 
-  const CARD  = "#1a3a5c";
-  const ACCENT = "#378ADD";
-  const GREEN = "#4caf50";
-  const RED   = "#e53935";
+  const CARD  = "var(--bg-card)";
+  const ACCENT = "var(--primary)";
+  const GREEN = "var(--success)";
+  const RED   = "var(--danger)";
 
   return (
     <div id="logbook-overview-print">
@@ -84,8 +84,8 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
       {/* Toolbar — hidden on print */}
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
-          <div style={{ fontSize: "14px", fontWeight: "700", color: "#fff" }}>Activities Overview</div>
-          <div style={{ fontSize: "11px", color: "#7ab3e0", marginTop: "2px" }}>
+          <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>Activities Overview</div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
             Monthly summary · {MONTH_NAMES[viewMonth]} {viewYear}
           </div>
         </div>
@@ -423,106 +423,106 @@ export default function Logbook() {
 
   // ── Styles ────────────────────────────────────────────────────────────────
   const s = {
-    page:      { fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif", color: "#e8edf5" },
-    title:     { fontSize: "18px", fontWeight: "700", color: "#fff", marginBottom: "4px" },
-    sub:       { fontSize: "12px", color: "#7ab3e0" },
+    page:      { fontFamily: "var(--font-family)", color: "var(--text-primary)" },
+    title:     { fontSize: "18px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "4px" },
+    sub:       { fontSize: "12px", color: "var(--text-muted)" },
     projSel:   {
       padding: "8px 12px", borderRadius: "6px", fontSize: "12px",
-      background: CARD, border: "1px solid rgba(122,179,224,0.3)", color: "#e8edf5",
-      cursor: "pointer", minWidth: "260px", fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      background: "var(--bg-input)", border: "1px solid var(--border-input)", color: "var(--text-primary)",
+      cursor: "pointer", minWidth: "260px", fontFamily: "var(--font-family)",
     },
     statsStrip: { display: "flex", gap: "12px", marginBottom: "20px" },
     statBox:   {
       flex: 1, background: CARD, borderRadius: "10px", padding: "16px",
-      border: "1px solid rgba(122,179,224,0.15)", textAlign: "center",
+      border: "1px solid var(--border-main)", textAlign: "center",
     },
     statNum:   { fontSize: "26px", fontWeight: "700", color: ACCENT },
-    statLabel: { fontSize: "10px", color: "#7ab3e0", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.5px" },
+    statLabel: { fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.5px" },
     monthNav:  {
       display: "flex", alignItems: "center", justifyContent: "space-between",
       background: CARD, borderRadius: "10px", padding: "12px 20px", marginBottom: "16px",
-      border: "1px solid rgba(122,179,224,0.15)",
+      border: "1px solid var(--border-main)",
     },
     navBtn: (on) => ({
-      background: "rgba(55,138,221,0.15)", border: "1px solid rgba(55,138,221,0.3)",
+      background: "var(--bg-secondary)", border: "1px solid var(--border-main)",
       color: ACCENT, borderRadius: "6px", padding: "6px 16px", cursor: on ? "pointer" : "default",
-      fontSize: "15px", opacity: on ? 1 : 0.3, fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      fontSize: "15px", opacity: on ? 1 : 0.3, fontFamily: "var(--font-family)",
     }),
-    monthLabel: { fontSize: "15px", fontWeight: "700", color: "#fff" },
+    monthLabel: { fontSize: "15px", fontWeight: "700", color: "var(--text-primary)" },
     calWrap:   { display: "flex", gap: "16px", alignItems: "flex-start" },
-    calCard:   { flex: 1, background: CARD, borderRadius: "10px", padding: "16px", border: "1px solid rgba(122,179,224,0.15)" },
+    calCard:   { flex: 1, background: CARD, borderRadius: "10px", padding: "16px", border: "1px solid var(--border-main)" },
     dowRow:    { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px", marginBottom: "6px" },
-    dowCell:   { textAlign: "center", fontSize: "11px", fontWeight: "600", color: "#7ab3e0", padding: "4px 0" },
+    dowCell:   { textAlign: "center", fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)", padding: "4px 0" },
     daysGrid:  { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px" },
     dayCell: (color, isToday, isSel) => ({
       minHeight: "54px", borderRadius: "8px", cursor: "pointer",
-      background: color ? color + "1a" : "rgba(255,255,255,0.04)",
+      background: color ? `color-mix(in srgb, ${color} 10%, transparent)` : "var(--bg-hover)",
       border: isToday
         ? `2px solid ${ACCENT}`
         : isSel
-          ? "2px solid rgba(255,255,255,0.55)"
-          : `1px solid ${color ? color + "40" : "rgba(255,255,255,0.06)"}`,
+          ? `2px solid var(--primary-border)`
+          : `1px solid ${color ? `color-mix(in srgb, ${color} 25%, transparent)` : "var(--border-light)"}`,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
       padding: "6px 4px", boxSizing: "border-box", transition: "all 0.12s",
     }),
-    dayNum: (isToday) => ({ fontSize: "13px", fontWeight: isToday ? "800" : "600", color: isToday ? ACCENT : "#e8edf5" }),
+    dayNum: (isToday) => ({ fontSize: "13px", fontWeight: isToday ? "800" : "600", color: isToday ? ACCENT : "var(--text-primary)" }),
     panelWrap: {
       width: "340px", flexShrink: 0, background: CARD, borderRadius: "10px",
-      border: "1px solid rgba(122,179,224,0.2)", padding: "20px", boxSizing: "border-box",
+      border: "1px solid var(--border-main)", padding: "20px", boxSizing: "border-box",
       overflowY: "auto", maxHeight: "640px",
     },
-    panelTitle: { fontSize: "14px", fontWeight: "700", color: "#fff", marginBottom: "14px", borderBottom: "1px solid rgba(122,179,224,0.2)", paddingBottom: "10px" },
-    fLabel:    { fontSize: "11px", color: "#7ab3e0", fontWeight: "600", display: "block", marginBottom: "4px", marginTop: "14px" },
+    panelTitle: { fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "14px", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px" },
+    fLabel:    { fontSize: "11px", color: "var(--text-secondary)", fontWeight: "600", display: "block", marginBottom: "4px", marginTop: "14px" },
     textInput: {
       width: "100%", padding: "8px 10px", borderRadius: "6px",
-      background: "rgba(255,255,255,0.07)", border: "1px solid rgba(122,179,224,0.25)",
-      color: "#e8edf5", fontSize: "12px", boxSizing: "border-box", outline: "none",
-      fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      background: "var(--bg-input)", border: "1px solid var(--border-input)",
+      color: "var(--text-primary)", fontSize: "12px", boxSizing: "border-box", outline: "none",
+      fontFamily: "var(--font-family)",
     },
     selInput:  {
       width: "100%", padding: "8px 10px", borderRadius: "6px",
-      background: "rgba(255,255,255,0.07)", border: "1px solid rgba(122,179,224,0.25)",
-      color: "#e8edf5", fontSize: "12px", boxSizing: "border-box", cursor: "pointer",
-      fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      background: "var(--bg-input)", border: "1px solid var(--border-input)",
+      color: "var(--text-primary)", fontSize: "12px", boxSizing: "border-box", cursor: "pointer",
+      fontFamily: "var(--font-family)",
     },
     togGroup:  { display: "flex", gap: "8px", marginTop: "6px" },
     togBtn: (active, color) => ({
       flex: 1, padding: "8px", borderRadius: "6px", cursor: "pointer",
-      border: `1px solid ${active ? color : "rgba(122,179,224,0.25)"}`,
-      background: active ? color + "22" : "transparent",
-      color: active ? color : "#7ab3e0", fontSize: "12px", fontWeight: "600",
-      fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      border: `1px solid ${active ? color : "var(--border-input)"}`,
+      background: active ? `color-mix(in srgb, ${color} 13%, transparent)` : "transparent",
+      color: active ? color : "var(--text-muted)", fontSize: "12px", fontWeight: "600",
+      fontFamily: "var(--font-family)",
     }),
     actItem:   {
       display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "6px 10px", background: "rgba(255,255,255,0.05)", borderRadius: "6px",
-      marginBottom: "4px", fontSize: "12px", color: "#e8edf5",
+      padding: "6px 10px", background: "var(--bg-secondary)", borderRadius: "6px",
+      marginBottom: "4px", fontSize: "12px", color: "var(--text-primary)",
     },
-    rmBtn:     { background: "none", border: "none", color: "#e24b4a", cursor: "pointer", fontSize: "14px", padding: "0 2px" },
+    rmBtn:     { background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: "14px", padding: "0 2px" },
     addRow:    { display: "flex", gap: "6px", marginTop: "8px" },
     addInput:  {
       flex: 1, padding: "7px 10px", borderRadius: "6px",
-      background: "rgba(255,255,255,0.07)", border: "1px solid rgba(122,179,224,0.25)",
-      color: "#e8edf5", fontSize: "12px", outline: "none",
-      fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      background: "var(--bg-input)", border: "1px solid var(--border-input)",
+      color: "var(--text-primary)", fontSize: "12px", outline: "none",
+      fontFamily: "var(--font-family)",
     },
     addBtn:    {
       padding: "7px 14px", borderRadius: "6px", background: ACCENT,
       border: "none", color: "#fff", cursor: "pointer", fontSize: "12px", fontWeight: "600",
-      fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      fontFamily: "var(--font-family)",
     },
     saveBtn: (saved) => ({
       width: "100%", marginTop: "16px", padding: "10px", borderRadius: "8px",
       background: saved ? GREEN : ACCENT, border: "none", color: "#fff", cursor: "pointer",
       fontSize: "13px", fontWeight: "700", transition: "background 0.2s",
-      fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
+      fontFamily: "var(--font-family)",
     }),
     legend:    { display: "flex", gap: "14px", marginTop: "14px", flexWrap: "wrap" },
-    legItem:   { display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "#7ab3e0" },
+    legItem:   { display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--text-muted)" },
     legDot: (c) => ({ width: "10px", height: "10px", borderRadius: "3px", background: c }),
     emptyPanel: {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      height: "220px", color: "#7ab3e0", fontSize: "12px", textAlign: "center", gap: "8px",
+      height: "220px", color: "var(--text-muted)", fontSize: "12px", textAlign: "center", gap: "8px",
     },
   };
 
@@ -565,8 +565,8 @@ export default function Logbook() {
               padding: "8px 20px", borderRadius: "8px", fontSize: "13px", cursor: "pointer",
               fontWeight: activeTab === tab.key ? "700" : "400",
               background: activeTab === tab.key ? ACCENT : "transparent",
-              color: activeTab === tab.key ? "#fff" : "#7ab3e0",
-              border: activeTab === tab.key ? "none" : "1px solid rgba(122,179,224,0.3)",
+              color: activeTab === tab.key ? "#fff" : "var(--text-secondary)",
+              border: activeTab === tab.key ? "none" : "1px solid var(--border-main)",
               fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
             }}
           >{tab.label}</button>
@@ -577,8 +577,8 @@ export default function Logbook() {
       {!selectedProjId && !projLoading && (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
           <div style={{ fontSize: "32px", marginBottom: "10px" }}>📋</div>
-          <div style={{ fontSize: "14px", fontWeight: "600", color: "#e8edf5" }}>No project selected</div>
-          <div style={{ fontSize: "12px", color: "#7ab3e0", marginTop: "6px" }}>
+          <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-primary)" }}>No project selected</div>
+          <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "6px" }}>
             Select a project above to view its logbook.
           </div>
         </div>
@@ -616,7 +616,7 @@ export default function Logbook() {
                 {/* Calendar */}
                 <div style={s.calCard}>
                   {dataLoading && (
-                    <div style={{ textAlign: "center", color: "#7ab3e0", fontSize: "12px", padding: "20px 0" }}>
+                    <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: "12px", padding: "20px 0" }}>
                       Loading…
                     </div>
                   )}
@@ -636,12 +636,12 @@ export default function Logbook() {
                             <div key={day} style={s.dayCell(color, isToday, isSel)} onClick={() => openDay(day)}>
                               <span style={s.dayNum(isToday)}>{day}</span>
                               {data?.activities?.length > 0 && (
-                                <span style={{ fontSize: "9px", color: GREEN, marginTop: "2px" }}>
+                                <span style={{ fontSize: "9px", color: "var(--success)", marginTop: "2px" }}>
                                   {data.activities.length} act.
                                 </span>
                               )}
                               {data?.workable === false && (
-                                <span style={{ fontSize: "9px", color: RED, marginTop: "2px" }}>✕</span>
+                                <span style={{ fontSize: "9px", color: "var(--danger)", marginTop: "2px" }}>✕</span>
                               )}
                             </div>
                           );
@@ -685,8 +685,8 @@ export default function Logbook() {
                           placeholder="e.g. Sunny, Rainy…"
                         />
                       ) : (
-                        <div style={{ fontSize: "13px", color: "#e8edf5", padding: "4px 0" }}>
-                          {panel.weather || <span style={{ color: "#7ab3e0", fontStyle: "italic" }}>Not set</span>}
+                        <div style={{ fontSize: "13px", color: "var(--text-primary)", padding: "4px 0" }}>
+                          {panel.weather || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Not set</span>}
                         </div>
                       )}
 
@@ -698,7 +698,7 @@ export default function Logbook() {
                           <button style={s.togBtn(!panel.workable, RED)}   onClick={() => setPanel(p => ({ ...p, workable: false }))}>✕ Unworkable</button>
                         </div>
                       ) : (
-                        <div style={{ fontSize: "13px", color: panel.workable ? GREEN : RED, fontWeight: "600", padding: "4px 0" }}>
+                        <div style={{ fontSize: "13px", color: panel.workable ? "var(--success)" : "var(--danger)", fontWeight: "600", padding: "4px 0" }}>
                           {panel.workable ? "Workable" : "Unworkable"}
                         </div>
                       )}
@@ -728,10 +728,10 @@ export default function Logbook() {
                               )}
                             </>
                           ) : (
-                            <div style={{ fontSize: "13px", color: "#e8edf5", padding: "4px 0" }}>
+                            <div style={{ fontSize: "13px", color: "var(--text-primary)", padding: "4px 0" }}>
                               {panel.unworkableReason === "__other__"
                                 ? (panel.otherReason || "Other")
-                                : (panel.unworkableReason || <span style={{ color: "#7ab3e0", fontStyle: "italic" }}>Not specified</span>)}
+                                : (panel.unworkableReason || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Not specified</span>)}
                             </div>
                           )}
                         </>
@@ -741,22 +741,22 @@ export default function Logbook() {
                       <label style={{ ...s.fLabel, marginTop: "18px" }}>
                         Activities
                         {panel.activities.length > 0 && (
-                          <span style={{ fontWeight: "400", color: "#7ab3e0", marginLeft: "6px" }}>
+                          <span style={{ fontWeight: "400", color: "var(--text-muted)", marginLeft: "6px" }}>
                             ({panel.activities.length})
                           </span>
                         )}
                       </label>
                       {panel.activities.length === 0 && (
-                        <div style={{ fontSize: "11px", color: "#7ab3e0", fontStyle: "italic", padding: "4px 0" }}>
+                        <div style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic", padding: "4px 0" }}>
                           No activities logged yet.
                         </div>
                       )}
                       {panel.activities.map((act, i) => (
                         <div key={act.id || i} style={s.actItem}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1 }}>
-                            <span style={{ fontSize: "12px", color: "#e8edf5" }}>{act.description || act}</span>
+                            <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>{act.description || act}</span>
                             {act.displayName && (
-                              <span style={{ fontSize: "10px", color: "#7ab3e0" }}>
+                              <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
                                 {act.displayName} · {act.timestamp ? new Date(act.timestamp).toLocaleString() : ""}
                               </span>
                             )}

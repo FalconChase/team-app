@@ -23,33 +23,92 @@ const MONTH_NAMES  = [
 function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
 function getFirstDow(year, month) { const d = new Date(year, month, 1).getDay(); return d === 0 ? 6 : d - 1; }
 
-function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear, viewMonth, dayData, dataLoading, MONTH_NAMES, weatherMap }) {
+function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear, viewMonth, dayData, dataLoading, MONTH_NAMES, weatherMap, canEdit, unworkableReasons, userProfile, onDayUpdated }) {
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
-  function handlePrint() { window.print(); }
+  const [editingDay,    setEditingDay]    = useState(null);
+  const [editDraft,     setEditDraft]     = useState({ activities: [], unworkableReason: "", otherReason: "", newActivity: "" });
+  const [editSaving,    setEditSaving]    = useState(false);
+  const [showPrintPrompt, setShowPrintPrompt] = useState(false);
+
+  function openEdit(day) {
+    const d = dayData[String(day)] || {};
+    setEditDraft({
+      activities:        d.activities        || [],
+      unworkableReason:  d.unworkableReason  || "",
+      otherReason:       d.otherReason       || "",
+      newActivity:       "",
+    });
+    setEditingDay(day);
+  }
+
+  function cancelEdit() { setEditingDay(null); }
+
+  async function saveEdit(day) {
+    setEditSaving(true);
+    const key = String(day);
+    const ym  = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
+    const existing = dayData[key] || {};
+    const payload = {
+      ...existing,
+      activities:       editDraft.activities,
+      unworkableReason: editDraft.unworkableReason,
+      otherReason:      editDraft.unworkableReason === "__other__" ? editDraft.otherReason : "",
+      updatedBy:        userProfile?.displayName || userProfile?.email || "Unknown",
+      updatedAt:        new Date().toISOString(),
+    };
+    try {
+      await setDoc(doc(db, "teams", teamId, "projects", selectedProjId, "logbook", ym, "days", key), payload, { merge: true });
+      onDayUpdated(key, payload);
+      setEditingDay(null);
+    } catch (e) { console.error(e); }
+    finally { setEditSaving(false); }
+  }
+
+  function addActivity() {
+    const text = editDraft.newActivity.trim();
+    if (!text) return;
+    setEditDraft(d => ({
+      ...d,
+      activities:  [...d.activities, { id: Date.now(), description: text, displayName: userProfile?.displayName || "", timestamp: new Date().toISOString() }],
+      newActivity: "",
+    }));
+  }
+
+  function handlePrintClick() { setShowPrintPrompt(true); }
+
+  function doPrint(withTheme) {
+    setShowPrintPrompt(false);
+    if (!withTheme) {
+      const prev = document.documentElement.getAttribute("data-theme");
+      document.documentElement.removeAttribute("data-theme");
+      setTimeout(() => {
+        window.print();
+        if (prev) document.documentElement.setAttribute("data-theme", prev);
+        else document.documentElement.removeAttribute("data-theme");
+      }, 60);
+    } else {
+      window.print();
+    }
+  }
 
   const rows = Array.from({ length: daysInMonth }, (_, i) => {
     const day = i + 1;
     const key = String(day);
     const d   = dayData[key] || {};
-    const dateObj = new Date(viewYear, viewMonth, day);
+    const dateObj  = new Date(viewYear, viewMonth, day);
     const dateLabel = dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     const activities = d.activities || [];
     const actText = activities.length > 0
       ? activities.map(a => typeof a === "string" ? a : a.description).filter(Boolean).join("; ")
       : "";
-    const wSnap      = weatherMap?.[key];
-    const weather    = d.weather || wSnap?.label || "";
-    const workable   = d.workable !== undefined ? d.workable : (wSnap !== undefined ? wSnap.workable : undefined);
+    const wSnap    = weatherMap?.[key];
+    const weather  = d.weather || wSnap?.label || "";
+    const workable = d.workable !== undefined ? d.workable : (wSnap !== undefined ? wSnap.workable : undefined);
     const defaultAct = (actText === "" && workable === false) ? "No activities on site" : actText;
     return { day, dateLabel, weather, actText: defaultAct, workable, unworkableReason: d.unworkableReason || "", otherReason: d.otherReason || "" };
   });
 
-  const projectLabel = selectedProject
-    ? (selectedProject.projectId || "") + (selectedProject.projectName ? " — " + selectedProject.projectName : "")
-    : "";
-
-  // Print styles injected into <head> via a style tag — only active during window.print()
   const printStyle = `
     #logbook-overview-print .print-header { display: none; }
     @media print {
@@ -72,16 +131,50 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
     }
   `;
 
-  const CARD  = "var(--bg-card)";
-  const ACCENT = "var(--primary)";
-  const GREEN = "var(--success)";
-  const RED   = "var(--danger)";
+  const inBtn  = { padding: "4px 10px", borderRadius: "4px", border: "none", cursor: "pointer", fontSize: "11px", fontFamily: "var(--font-family)" };
+  const inInput = { padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: "11px", fontFamily: "var(--font-family)" };
 
   return (
     <div id="logbook-overview-print">
       <style>{printStyle}</style>
 
-      {/* Toolbar — hidden on print */}
+      {/* Print-theme prompt modal */}
+      {showPrintPrompt && (
+        <div className="no-print" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "var(--bg-card)", borderRadius: "12px", padding: "28px 32px",
+            border: "1px solid var(--border-main)", maxWidth: "360px", width: "90%",
+            boxShadow: "var(--shadow-lg)",
+          }}>
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "6px" }}>Print Options</div>
+            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "20px" }}>
+              How would you like to print this document?
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button onClick={() => doPrint(true)} style={{
+                padding: "10px", borderRadius: "8px", background: "var(--primary)",
+                border: "none", color: "#fff", cursor: "pointer", fontSize: "13px", fontWeight: "600",
+                fontFamily: "var(--font-family)",
+              }}>🎨 Print with current theme</button>
+              <button onClick={() => doPrint(false)} style={{
+                padding: "10px", borderRadius: "8px", background: "transparent",
+                border: "1px solid var(--border-main)", color: "var(--text-primary)", cursor: "pointer",
+                fontSize: "13px", fontWeight: "600", fontFamily: "var(--font-family)",
+              }}>🖨️ Print in default (no theme)</button>
+              <button onClick={() => setShowPrintPrompt(false)} style={{
+                padding: "8px", borderRadius: "8px", background: "transparent",
+                border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "12px",
+                fontFamily: "var(--font-family)",
+              }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toolbar */}
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
           <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>Activities Overview</div>
@@ -89,19 +182,14 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
             Monthly summary · {MONTH_NAMES[viewMonth]} {viewYear}
           </div>
         </div>
-        <button
-          onClick={handlePrint}
-          style={{
-            padding: "8px 18px", borderRadius: "8px", background: ACCENT,
-            border: "none", color: "#fff", cursor: "pointer", fontSize: "12px",
-            fontWeight: "600", fontFamily: "'IBM Plex Sans', Tahoma, Geneva, sans-serif",
-          }}
-        >
-          🖨️ Print
-        </button>
+        <button onClick={handlePrintClick} style={{
+          padding: "8px 18px", borderRadius: "8px", background: "var(--primary)",
+          border: "none", color: "#fff", cursor: "pointer", fontSize: "12px",
+          fontWeight: "600", fontFamily: "var(--font-family)",
+        }}>🖨️ Print</button>
       </div>
 
-      {/* Print header — hidden on screen via CSS, visible on print */}
+      {/* Print header */}
       <div className="print-header">
         <h1>Activity Logs</h1>
         <div className="meta">
@@ -137,6 +225,7 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                     borderRight: "1px solid var(--border-light)",
                   }}>{h}</th>
                 ))}
+                {canEdit && <th className="no-print" style={{ background: "var(--bg-secondary)", borderBottom: "2px solid var(--border-main)", width: "60px" }} />}
               </tr>
             </thead>
             <tbody>
@@ -144,28 +233,117 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                 const isUnworkable = workable === false;
                 const isWorkable   = workable === true;
                 const isEmpty      = workable === undefined;
+                const isEditing    = editingDay === day;
                 const rowBg = isUnworkable
                   ? `color-mix(in srgb, var(--danger) 6%, transparent)`
                   : isWorkable && actText
                     ? `color-mix(in srgb, var(--success) 5%, transparent)`
                     : "transparent";
-                const reason = unworkableReason === "__other__"
-                  ? otherReason
-                  : unworkableReason;
+                const reason = unworkableReason === "__other__" ? otherReason : unworkableReason;
+
                 return (
                   <tr key={day} style={{ background: rowBg, borderBottom: "1px solid var(--border-light)" }}>
+
+                    {/* DATE — always read-only */}
                     <td style={{ padding: "8px 12px", color: "var(--text-primary)", whiteSpace: "nowrap", fontWeight: "700", width: "120px" }}>{dateLabel}</td>
-                    <td style={{ padding: "8px 12px", color: "var(--text-secondary)", width: "110px" }}>{weather || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}</td>
-                    <td style={{ padding: "8px 12px", color: "var(--text-primary)", lineHeight: "1.5" }}>{actText || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No activities logged</span>}</td>
+
+                    {/* WEATHER — always read-only */}
+                    <td style={{ padding: "8px 12px", color: "var(--text-secondary)", width: "110px" }}>
+                      {weather || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}
+                    </td>
+
+                    {/* SITE ACTIVITIES — editable */}
+                    <td style={{ padding: "8px 12px", color: "var(--text-primary)", lineHeight: "1.6" }}>
+                      {isEditing ? (
+                        <div>
+                          {editDraft.activities.length === 0 && (
+                            <div style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic", marginBottom: "6px" }}>No activities yet.</div>
+                          )}
+                          {editDraft.activities.map((act, i) => (
+                            <div key={act.id || i} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                              <span style={{ flex: 1, fontSize: "12px", color: "var(--text-primary)" }}>{act.description || act}</span>
+                              <button onClick={() => setEditDraft(d => ({ ...d, activities: d.activities.filter((_, ai) => ai !== i) }))}
+                                style={{ ...inBtn, background: "none", color: "var(--danger)", padding: "0 4px" }}>✕</button>
+                            </div>
+                          ))}
+                          <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
+                            <input
+                              value={editDraft.newActivity}
+                              onChange={e => setEditDraft(d => ({ ...d, newActivity: e.target.value }))}
+                              onKeyDown={e => { if (e.key === "Enter") addActivity(); }}
+                              placeholder="Add activity…"
+                              style={{ ...inInput, flex: 1 }}
+                            />
+                            <button onClick={addActivity} style={{ ...inBtn, background: "var(--primary)", color: "#fff" }}>Add</button>
+                          </div>
+                        </div>
+                      ) : (
+                        actText || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No activities logged</span>
+                      )}
+                    </td>
+
+                    {/* STATUS — always read-only */}
                     <td style={{ padding: "8px 12px", whiteSpace: "nowrap", width: "110px" }}>
                       {isEmpty
                         ? <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>
                         : isWorkable
-                          ? <span className="status-w" style={{ color: GREEN, fontWeight: "600" }}>✓ Workable</span>
-                          : <span className="status-u" style={{ color: RED,   fontWeight: "600" }}>✕ Unworkable</span>
+                          ? <span className="status-w" style={{ color: "var(--success)", fontWeight: "600" }}>✓ Workable</span>
+                          : <span className="status-u" style={{ color: "var(--danger)", fontWeight: "600" }}>✕ Unworkable</span>
                       }
                     </td>
-                    <td style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: "11px" }}>{isUnworkable ? reason : ""}</td>
+
+                    {/* REMARKS — editable (dropdown) when unworkable */}
+                    <td style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: "11px", minWidth: "160px" }}>
+                      {isEditing ? (
+                        <div>
+                          {isUnworkable && (
+                            <>
+                              <select
+                                value={editDraft.unworkableReason}
+                                onChange={e => setEditDraft(d => ({ ...d, unworkableReason: e.target.value }))}
+                                style={{ ...inInput, width: "100%", marginBottom: "4px" }}
+                              >
+                                <option value="">— Select reason —</option>
+                                {(unworkableReasons || []).map(r => <option key={r} value={r}>{r}</option>)}
+                                <option value="__other__">Other (specify)</option>
+                              </select>
+                              {editDraft.unworkableReason === "__other__" && (
+                                <input
+                                  value={editDraft.otherReason}
+                                  onChange={e => setEditDraft(d => ({ ...d, otherReason: e.target.value }))}
+                                  placeholder="Specify reason…"
+                                  style={{ ...inInput, width: "100%", marginBottom: "4px" }}
+                                />
+                              )}
+                            </>
+                          )}
+                          <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                            <button onClick={() => saveEdit(day)} disabled={editSaving}
+                              style={{ ...inBtn, flex: 1, background: "var(--primary)", color: "#fff" }}>
+                              {editSaving ? "Saving…" : "Save"}
+                            </button>
+                            <button onClick={cancelEdit}
+                              style={{ ...inBtn, background: "transparent", border: "1px solid var(--border-input)", color: "var(--text-secondary)" }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        isUnworkable ? reason : ""
+                      )}
+                    </td>
+
+                    {/* EDIT ACTION — hidden on print */}
+                    {canEdit && (
+                      <td className="no-print" style={{ padding: "6px 8px", textAlign: "center", width: "60px" }}>
+                        {!isEditing && (
+                          <button onClick={() => openEdit(day)} style={{
+                            ...inBtn, background: "var(--bg-secondary)",
+                            border: "1px solid var(--border-main)", color: "var(--text-secondary)",
+                          }}>✏️</button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -174,13 +352,13 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
         </div>
       )}
 
-      {/* Legend — hidden on print */}
+      {/* Legend */}
       <div className="no-print" style={{ display: "flex", gap: "16px", marginTop: "14px", flexWrap: "wrap" }}>
         {[
-          { c: GREEN,                l: "Workable with activities"  },
-          { c: "var(--warning)",     l: "Workable, no activities"   },
-          { c: RED,                  l: "Unworkable"                },
-          { c: "var(--text-muted)",  l: "No entry yet"              },
+          { c: "var(--success)",    l: "Workable with activities" },
+          { c: "var(--warning)",    l: "Workable, no activities"  },
+          { c: "var(--danger)",     l: "Unworkable"               },
+          { c: "var(--text-muted)", l: "No entry yet"             },
         ].map(({ c, l }) => (
           <div key={l} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "var(--text-muted)" }}>
             <div style={{ width: "10px", height: "10px", borderRadius: "3px", background: c }} />
@@ -801,6 +979,10 @@ export default function Logbook() {
               dataLoading={dataLoading}
               MONTH_NAMES={MONTH_NAMES}
               weatherMap={weatherMap}
+              canEdit={canEdit}
+              unworkableReasons={unworkableReasons}
+              userProfile={userProfile}
+              onDayUpdated={(key, data) => setDayData(prev => ({ ...prev, [key]: data }))}
             />
           )}
         </>

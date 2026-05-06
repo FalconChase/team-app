@@ -47,16 +47,16 @@ export default function WeatherTool() {
   const { userProfile } = useAuth();
   const { team }        = useTeam();
 
-  const [activeTab, setActiveTab]               = useState('input');
-  const [contractInfo, setContractInfo]         = useState(INITIAL_CONTRACT_INFO);
+  const [activeTab, setActiveTab]               = useState(sessionStorage.getItem("weather_tab") || 'input');
+  const [contractInfo, setContractInfo]         = useState(() => { try { const v = sessionStorage.getItem("weather_contractInfo"); return v ? JSON.parse(v) : INITIAL_CONTRACT_INFO; } catch { return INITIAL_CONTRACT_INFO; } });
   const [isAutoGenerateOpen, setAutoGenOpen]    = useState(false);
   const [isLogsOpen, setLogsOpen]               = useState(false);
-  const [weatherData, setWeatherData]           = useState(makeEmptyGrid);
+  const [weatherData, setWeatherData]           = useState(() => { try { const v = sessionStorage.getItem("weather_grid"); return v ? JSON.parse(v) : makeEmptyGrid(); } catch { return makeEmptyGrid(); } });
 
   // ── Hour-range state ─────────────────────────────────────────────────────────
-  const [hourMode,        setHourMode]          = useState('24h');
-  const [customStart,     setCustomStart]       = useState(0);
-  const [customEnd,       setCustomEnd]         = useState(23);
+  const [hourMode,        setHourMode]          = useState(sessionStorage.getItem("weather_hourMode") || '24h');
+  const [customStart,     setCustomStart]       = useState(Number(sessionStorage.getItem("weather_customStart")) || 0);
+  const [customEnd,       setCustomEnd]         = useState(sessionStorage.getItem("weather_customEnd") !== null ? Number(sessionStorage.getItem("weather_customEnd")) : 23);
 
   // ── Derive the active start/end from current mode ────────────────────────────
   const activeStart = hourMode === 'custom'
@@ -75,12 +75,17 @@ export default function WeatherTool() {
       const next = [...prev];
       next[dayIdx] = [...next[dayIdx]];
       next[dayIdx][hourIdx] = value;
+      sessionStorage.setItem("weather_grid", JSON.stringify(next));
       return next;
     });
   };
 
   const handleAutoGenerate = (startDay, endDay, unworkableCount) => {
-    setWeatherData(prev => generateRangeData(startDay, endDay, unworkableCount, prev));
+    setWeatherData(prev => {
+      const next = generateRangeData(startDay, endDay, unworkableCount, prev);
+      sessionStorage.setItem("weather_grid", JSON.stringify(next));
+      return next;
+    });
 
     // ── Audit log ────────────────────────────────────────────────────────────
     logAction({
@@ -94,7 +99,9 @@ export default function WeatherTool() {
 
   const handleClear = () => {
     if (window.confirm('Are you sure you want to clear all weather data? This cannot be undone.')) {
-      setWeatherData(makeEmptyGrid());
+      const emptyGrid = makeEmptyGrid();
+      sessionStorage.setItem("weather_grid", JSON.stringify(emptyGrid));
+      setWeatherData(emptyGrid);
 
       // ── Audit log ──────────────────────────────────────────────────────────
       logAction({
@@ -182,7 +189,7 @@ export default function WeatherTool() {
                 <button
                   key={tab.id}
                   className={`wt-tab${activeTab === tab.id ? ' active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => { sessionStorage.setItem("weather_tab", tab.id); setActiveTab(tab.id); }}
                 >
                   {tab.label}
                 </button>
@@ -213,7 +220,7 @@ export default function WeatherTool() {
 
         {/* Header form */}
         <p className="wt-section-label">PCMA Project Metadata</p>
-        <HeaderForm info={contractInfo} onChange={setContractInfo} />
+        <HeaderForm info={contractInfo} onChange={v => { sessionStorage.setItem("weather_contractInfo", JSON.stringify(v)); setContractInfo(v); }} />
 
         {/* ── Hour-range control bar ── */}
         {isPreviewTab && (
@@ -227,7 +234,7 @@ export default function WeatherTool() {
                 <button
                   key={mode.id}
                   className={`wt-hour-mode-btn${hourMode === mode.id ? ' active' : ''}`}
-                  onClick={() => setHourMode(mode.id)}
+                  onClick={() => { sessionStorage.setItem("weather_hourMode", mode.id); setHourMode(mode.id); }}
                   title={`${fmtHour(mode.start + 1)} – ${fmtHour(mode.end + 1)}`}
                 >
                   {mode.label}
@@ -235,7 +242,7 @@ export default function WeatherTool() {
               ))}
               <button
                 className={`wt-hour-mode-btn${hourMode === 'custom' ? ' active' : ''}`}
-                onClick={() => setHourMode('custom')}
+                onClick={() => { sessionStorage.setItem("weather_hourMode", "custom"); setHourMode('custom'); }}
               >
                 Custom
               </button>
@@ -251,8 +258,9 @@ export default function WeatherTool() {
                     value={customStart}
                     onChange={e => {
                       const val = Number(e.target.value);
+                      sessionStorage.setItem("weather_customStart", val);
                       setCustomStart(val);
-                      if (val > customEnd) setCustomEnd(val);
+                      if (val > customEnd) { sessionStorage.setItem("weather_customEnd", val); setCustomEnd(val); }
                     }}
                   >
                     {Array.from({ length: 24 }, (_, h) => (
@@ -267,8 +275,9 @@ export default function WeatherTool() {
                     value={customEnd}
                     onChange={e => {
                       const val = Number(e.target.value);
+                      sessionStorage.setItem("weather_customEnd", val);
                       setCustomEnd(val);
-                      if (val < customStart) setCustomStart(val);
+                      if (val < customStart) { sessionStorage.setItem("weather_customStart", val); setCustomStart(val); }
                     }}
                   >
                     {Array.from({ length: 24 }, (_, h) => (
@@ -348,6 +357,8 @@ export default function WeatherTool() {
         contractInfo={contractInfo}
         weatherData={weatherData}
         onLoad={(info, data) => {
+          sessionStorage.setItem("weather_contractInfo", JSON.stringify(info));
+          sessionStorage.setItem("weather_grid", JSON.stringify(data));
           setContractInfo(info);
           setWeatherData(data);
         }}

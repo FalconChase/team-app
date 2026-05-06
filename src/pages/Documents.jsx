@@ -740,8 +740,8 @@ export default function Documents() {
   const [subjectTypes, setSubjectTypes] = useState(DEFAULT_SUBJECT_TYPES);
   const [expanded,     setExpanded]     = useState({});
   const [showForm,     setShowForm]     = useState(false);
-  const [filterStatus, setFilterStatus] = useState("All");
-  const [filterProj,   setFilterProj]   = useState("All");
+  const [filterStatus, setFilterStatus] = useState(sessionStorage.getItem("docs_filterStatus") || "All");
+  const [filterProj,   setFilterProj]   = useState(sessionStorage.getItem("docs_filterProj")   || "All");
   const [form,         setForm]         = useState(BLANK_FORM);
 
   // ── Archive modal state ────────────────────────────────────────────────────
@@ -1073,11 +1073,11 @@ export default function Documents() {
       </div>
 
       <div style={S.filters}>
-        <select style={S.select} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+        <select style={S.select} value={filterStatus} onChange={(e) => { sessionStorage.setItem("docs_filterStatus", e.target.value); setFilterStatus(e.target.value); }}>
           <option value="All">All Statuses</option>
           {statuses.map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
-        <select style={S.select} value={filterProj} onChange={(e) => setFilterProj(e.target.value)}>
+        <select style={S.select} value={filterProj} onChange={(e) => { sessionStorage.setItem("docs_filterProj", e.target.value); setFilterProj(e.target.value); }}>
           <option value="All">All Projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>)}
         </select>

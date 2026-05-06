@@ -190,9 +190,9 @@ export default function Logbook() {
 
   const [projects,          setProjects]          = useState([]);
   const [projLoading,       setProjLoading]       = useState(true);
-  const [selectedProjId,    setSelectedProjId]    = useState(searchParams.get("projectId") || "");
-  const [viewYear,          setViewYear]          = useState(todayYear);
-  const [viewMonth,         setViewMonth]         = useState(todayMonth);
+  const [selectedProjId,    setSelectedProjId]    = useState(searchParams.get("projectId") || sessionStorage.getItem("logbook_projId") || "");
+  const [viewYear,          setViewYear]          = useState(() => Number(sessionStorage.getItem("logbook_year")) || todayYear);
+  const [viewMonth,         setViewMonth]         = useState(() => { const v = sessionStorage.getItem("logbook_month"); return v !== null ? Number(v) : todayMonth; });
   const [dayData,           setDayData]           = useState({});
   const [dataLoading,       setDataLoading]       = useState(false);
   const [weatherMap,        setWeatherMap]        = useState({});
@@ -202,7 +202,7 @@ export default function Logbook() {
   const [newActivity,       setNewActivity]       = useState("");
   const [panelSaving,       setPanelSaving]       = useState(false);
   const [panelSaved,        setPanelSaved]        = useState(false);
-  const [activeTab,         setActiveTab]         = useState("daily");
+  const [activeTab,         setActiveTab]         = useState(sessionStorage.getItem("logbook_tab") || "daily");
 
   const selectedProject = projects.find(p => p.docId === selectedProjId) || null;
 
@@ -285,12 +285,26 @@ export default function Logbook() {
   function prevMonth() {
     if (!canGoPrev()) return;
     setSelectedDay(null);
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); } else setViewMonth(m => m - 1);
+    if (viewMonth === 0) {
+      sessionStorage.setItem("logbook_year", viewYear - 1);
+      sessionStorage.setItem("logbook_month", 11);
+      setViewYear(y => y - 1); setViewMonth(11);
+    } else {
+      sessionStorage.setItem("logbook_month", viewMonth - 1);
+      setViewMonth(m => m - 1);
+    }
   }
   function nextMonth() {
     if (!canGoNext()) return;
     setSelectedDay(null);
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); } else setViewMonth(m => m + 1);
+    if (viewMonth === 11) {
+      sessionStorage.setItem("logbook_year", viewYear + 1);
+      sessionStorage.setItem("logbook_month", 0);
+      setViewYear(y => y + 1); setViewMonth(0);
+    } else {
+      sessionStorage.setItem("logbook_month", viewMonth + 1);
+      setViewMonth(m => m + 1);
+    }
   }
 
   // ── Open day panel ────────────────────────────────────────────────────────
@@ -502,7 +516,7 @@ export default function Logbook() {
         <select
           style={s.projSel}
           value={selectedProjId}
-          onChange={e => { setSelectedProjId(e.target.value); setSelectedDay(null); }}
+          onChange={e => { sessionStorage.setItem("logbook_projId", e.target.value); setSelectedProjId(e.target.value); setSelectedDay(null); }}
           disabled={projLoading}
         >
           {projLoading && <option value="">Loading projects…</option>}
@@ -523,7 +537,7 @@ export default function Logbook() {
         ].map(tab => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => { sessionStorage.setItem("logbook_tab", tab.key); setActiveTab(tab.key); }}
             style={{
               padding: "8px 20px", borderRadius: "8px", fontSize: "13px", cursor: "pointer",
               fontWeight: activeTab === tab.key ? "700" : "400",

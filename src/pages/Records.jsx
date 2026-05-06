@@ -411,9 +411,9 @@ export default function Records() {
   const [archivedCount, setArchivedCount] = useState(0);
   const [loading,       setLoading]       = useState(true);
 
-  const [filterType,    setFilterType]    = useState("All");
-  const [filterProject, setFilterProject] = useState("All");
-  const [filterDate,    setFilterDate]    = useState("");
+  const [filterType,    setFilterType]    = useState(sessionStorage.getItem("records_filterType")    || "All");
+  const [filterProject, setFilterProject] = useState(sessionStorage.getItem("records_filterProject") || "All");
+  const [filterDate,    setFilterDate]    = useState(sessionStorage.getItem("records_filterDate")    || "");
 
   const [modal,        setModal]        = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -604,18 +604,18 @@ export default function Records() {
 
       {/* Filters */}
       <div style={S.filters}>
-        <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
+        <select id="filter-type" name="filter-type" style={S.select} value={filterType} onChange={e => { sessionStorage.setItem("records_filterType", e.target.value); setFilterType(e.target.value); }}>
           <option value="All">All Types</option>
           <option value="IN">▼ Incoming</option>
           <option value="OUT">▲ Outgoing</option>
         </select>
-        <select id="filter-project" name="filter-project" style={S.select} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+        <select id="filter-project" name="filter-project" style={S.select} value={filterProject} onChange={e => { sessionStorage.setItem("records_filterProject", e.target.value); setFilterProject(e.target.value); }}>
           <option value="All">All Projects</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.projectId || p.name || p.id}</option>)}
         </select>
-        <input id="filter-date" name="filter-date" type="date" style={S.dateInput} value={filterDate} onChange={e => setFilterDate(e.target.value)} title="Filter by date" />
+        <input id="filter-date" name="filter-date" type="date" style={S.dateInput} value={filterDate} onChange={e => { sessionStorage.setItem("records_filterDate", e.target.value); setFilterDate(e.target.value); }} title="Filter by date" />
         {hasFilters && (
-          <button style={S.clearBtn} onClick={() => { setFilterType("All"); setFilterProject("All"); setFilterDate(""); }}>
+          <button style={S.clearBtn} onClick={() => { sessionStorage.removeItem("records_filterType"); sessionStorage.removeItem("records_filterProject"); sessionStorage.removeItem("records_filterDate"); setFilterType("All"); setFilterProject("All"); setFilterDate(""); }}>
             ✕ Clear filters
           </button>
         )}

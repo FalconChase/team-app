@@ -6,6 +6,7 @@ import { useTeam } from "../contexts/TeamContext";
 import {
   collection, query, getDocs, doc, getDoc, setDoc, orderBy, where
 } from "firebase/firestore";
+import { isUnworkable, getWeatherDescription } from "../utils/weatherLogic";
 
 const ACCENT = "#378ADD";
 const CARD   = "#1a3a5c";
@@ -22,7 +23,7 @@ const MONTH_NAMES  = [
 function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
 function getFirstDow(year, month) { const d = new Date(year, month, 1).getDay(); return d === 0 ? 6 : d - 1; }
 
-function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear, viewMonth, dayData, dataLoading, MONTH_NAMES }) {
+function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear, viewMonth, dayData, dataLoading, MONTH_NAMES, weatherMap }) {
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
   function handlePrint() { window.print(); }
@@ -37,7 +38,11 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
     const actText = activities.length > 0
       ? activities.map(a => typeof a === "string" ? a : a.description).filter(Boolean).join("; ")
       : "";
-    return { day, dateLabel, weather: d.weather || "", actText, workable: d.workable, unworkableReason: d.unworkableReason || "", otherReason: d.otherReason || "" };
+    const wSnap      = weatherMap?.[key];
+    const weather    = d.weather || wSnap?.label || "";
+    const workable   = d.workable !== undefined ? d.workable : (wSnap !== undefined ? wSnap.workable : undefined);
+    const defaultAct = (actText === "" && workable === false) ? "No activities on site" : actText;
+    return { day, dateLabel, weather, actText: defaultAct, workable, unworkableReason: d.unworkableReason || "", otherReason: d.otherReason || "" };
   });
 
   const projectLabel = selectedProject
@@ -250,19 +255,16 @@ export default function Logbook() {
         if (!snap.empty) {
           // Use the most recently saved snapshot for this month
           const data = snap.docs[0].data();
-          const WEATHER_LABELS = { 1: "FAIR", 2: "CLOUDY", 3: "RAIN SHOWER", 4: "HEAVY RAIN" };
           if (Array.isArray(data.weatherData)) {
             data.weatherData.forEach((rowStr, idx) => {
               const day = idx + 1; // index 0 = day 1
               if (day > getDaysInMonth(viewYear, viewMonth)) return;
-              const values = rowStr.split(",").map(Number).filter(v => v > 0);
-              if (values.length === 0) return;
-              // Find dominant weather type (most frequent non-zero value)
-              const freq = {};
-              values.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
-              const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-              const label = WEATHER_LABELS[Number(dominant)];
-              if (label) wmap[String(day)] = label;
+              const hourlyData = rowStr.split(",").map(Number);
+              // Skip completely empty days (all zeros)
+              if (hourlyData.every(v => v === 0)) return;
+              const label    = getWeatherDescription(hourlyData); // e.g. "CLOUDY / RAIN SHOWER / HEAVY RAIN"
+              const workable = !isUnworkable(hourlyData);          // false = unworkable
+              if (label) wmap[String(day)] = { label, workable };
             });
           }
         }
@@ -293,14 +295,17 @@ export default function Logbook() {
 
   // ── Open day panel ────────────────────────────────────────────────────────
   function openDay(day) {
-    const key = String(day);
-    const ex  = dayData[key] || {};
+    const key     = String(day);
+    const ex      = dayData[key] || {};
+    const wSnap   = weatherMap[key];
+    // Saved Firestore data always wins. Weather snapshot fills gaps for unsaved days.
+    const hasSaved = ex.workable !== undefined;
     setPanel({
-      weather:            ex.weather             || weatherMap[key] || "",
-      workable:           ex.workable            !== undefined ? ex.workable : true,
-      unworkableReason:   ex.unworkableReason    || "",
-      otherReason:        ex.otherReason         || "",
-      activities:         ex.activities          || [],
+      weather:          ex.weather          || (wSnap?.label    || ""),
+      workable:         hasSaved            ? ex.workable : (wSnap !== undefined ? wSnap.workable : true),
+      unworkableReason: ex.unworkableReason || "",
+      otherReason:      ex.otherReason      || "",
+      activities:       ex.activities       || [],
     });
     setNewActivity("");
     setSelectedDay(day);
@@ -364,11 +369,19 @@ export default function Logbook() {
   const daysRemaining    = isCurrentMonth ? Math.max(0, daysInMonth - todayDay) : "—";
 
   function cellColor(day) {
-    const d = dayData[String(day)];
-    if (!d) return null;
-    if (d.workable === false) return RED;
-    if (d.activities?.length > 0) return GREEN;
-    return YELLOW;
+    const d     = dayData[String(day)];
+    const wSnap = weatherMap[String(day)];
+    // If Firestore has a saved entry, use it
+    if (d && d.workable !== undefined) {
+      if (d.workable === false) return RED;
+      if (d.activities?.length > 0) return GREEN;
+      return YELLOW;
+    }
+    // No saved entry — fall back to weather snapshot
+    if (wSnap !== undefined) {
+      return wSnap.workable ? YELLOW : RED;
+    }
+    return null;
   }
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -750,6 +763,7 @@ export default function Logbook() {
               dayData={dayData}
               dataLoading={dataLoading}
               MONTH_NAMES={MONTH_NAMES}
+              weatherMap={weatherMap}
             />
           )}
         </>

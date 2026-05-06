@@ -23,57 +23,10 @@ const MONTH_NAMES  = [
 function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
 function getFirstDow(year, month) { const d = new Date(year, month, 1).getDay(); return d === 0 ? 6 : d - 1; }
 
-function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear, viewMonth, dayData, dataLoading, MONTH_NAMES, weatherMap, canEdit, unworkableReasons, userProfile, onDayUpdated }) {
+function ActivitiesOverview({ selectedProject, viewYear, viewMonth, dayData, dataLoading, MONTH_NAMES, weatherMap, onNavigateToDay }) {
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
-  const [editingDay,    setEditingDay]    = useState(null);
-  const [editDraft,     setEditDraft]     = useState({ activities: [], unworkableReason: "", otherReason: "", newActivity: "" });
-  const [editSaving,    setEditSaving]    = useState(false);
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
-
-  function openEdit(day) {
-    const d = dayData[String(day)] || {};
-    setEditDraft({
-      activities:        d.activities        || [],
-      unworkableReason:  d.unworkableReason  || "",
-      otherReason:       d.otherReason       || "",
-      newActivity:       "",
-    });
-    setEditingDay(day);
-  }
-
-  function cancelEdit() { setEditingDay(null); }
-
-  async function saveEdit(day) {
-    setEditSaving(true);
-    const key = String(day);
-    const ym  = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
-    const existing = dayData[key] || {};
-    const payload = {
-      ...existing,
-      activities:       editDraft.activities,
-      unworkableReason: editDraft.unworkableReason,
-      otherReason:      editDraft.unworkableReason === "__other__" ? editDraft.otherReason : "",
-      updatedBy:        userProfile?.displayName || userProfile?.email || "Unknown",
-      updatedAt:        new Date().toISOString(),
-    };
-    try {
-      await setDoc(doc(db, "teams", teamId, "projects", selectedProjId, "logbook", ym, "days", key), payload, { merge: true });
-      onDayUpdated(key, payload);
-      setEditingDay(null);
-    } catch (e) { console.error(e); }
-    finally { setEditSaving(false); }
-  }
-
-  function addActivity() {
-    const text = editDraft.newActivity.trim();
-    if (!text) return;
-    setEditDraft(d => ({
-      ...d,
-      activities:  [...d.activities, { id: Date.now(), description: text, displayName: userProfile?.displayName || "", timestamp: new Date().toISOString() }],
-      newActivity: "",
-    }));
-  }
 
   function handlePrintClick() { setShowPrintPrompt(true); }
 
@@ -130,9 +83,6 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
       #logbook-overview-print .status-u { color: #c62828; font-weight: 600; }
     }
   `;
-
-  const inBtn  = { padding: "4px 10px", borderRadius: "4px", border: "none", cursor: "pointer", fontSize: "11px", fontFamily: "var(--font-family)" };
-  const inInput = { padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-primary)", fontSize: "11px", fontFamily: "var(--font-family)" };
 
   return (
     <div id="logbook-overview-print">
@@ -225,7 +175,6 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                     borderRight: "1px solid var(--border-light)",
                   }}>{h}</th>
                 ))}
-                {canEdit && <th className="no-print" style={{ background: "var(--bg-secondary)", borderBottom: "2px solid var(--border-main)", width: "60px" }} />}
               </tr>
             </thead>
             <tbody>
@@ -233,7 +182,6 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                 const isUnworkable = workable === false;
                 const isWorkable   = workable === true;
                 const isEmpty      = workable === undefined;
-                const isEditing    = editingDay === day;
                 const rowBg = isUnworkable
                   ? `color-mix(in srgb, var(--danger) 6%, transparent)`
                   : isWorkable && actText
@@ -242,47 +190,23 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                 const reason = unworkableReason === "__other__" ? otherReason : unworkableReason;
 
                 return (
-                  <tr key={day} style={{ background: rowBg, borderBottom: "1px solid var(--border-light)" }}>
-
-                    {/* DATE — always read-only */}
+                  <tr
+                    key={day}
+                    onClick={() => onNavigateToDay(day)}
+                    style={{ background: rowBg, borderBottom: "1px solid var(--border-light)", cursor: "pointer" }}
+                    onMouseEnter={e => { e.currentTarget.style.filter = "brightness(0.95)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.filter = ""; }}
+                  >
                     <td style={{ padding: "8px 12px", color: "var(--text-primary)", whiteSpace: "nowrap", fontWeight: "700", width: "120px" }}>{dateLabel}</td>
 
-                    {/* WEATHER — always read-only */}
                     <td style={{ padding: "8px 12px", color: "var(--text-secondary)", width: "110px" }}>
                       {weather || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}
                     </td>
 
-                    {/* SITE ACTIVITIES — editable */}
                     <td style={{ padding: "8px 12px", color: "var(--text-primary)", lineHeight: "1.6" }}>
-                      {isEditing ? (
-                        <div>
-                          {editDraft.activities.length === 0 && (
-                            <div style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic", marginBottom: "6px" }}>No activities yet.</div>
-                          )}
-                          {editDraft.activities.map((act, i) => (
-                            <div key={act.id || i} style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                              <span style={{ flex: 1, fontSize: "12px", color: "var(--text-primary)" }}>{act.description || act}</span>
-                              <button onClick={() => setEditDraft(d => ({ ...d, activities: d.activities.filter((_, ai) => ai !== i) }))}
-                                style={{ ...inBtn, background: "none", color: "var(--danger)", padding: "0 4px" }}>✕</button>
-                            </div>
-                          ))}
-                          <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
-                            <input
-                              value={editDraft.newActivity}
-                              onChange={e => setEditDraft(d => ({ ...d, newActivity: e.target.value }))}
-                              onKeyDown={e => { if (e.key === "Enter") addActivity(); }}
-                              placeholder="Add activity…"
-                              style={{ ...inInput, flex: 1 }}
-                            />
-                            <button onClick={addActivity} style={{ ...inBtn, background: "var(--primary)", color: "#fff" }}>Add</button>
-                          </div>
-                        </div>
-                      ) : (
-                        actText || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No activities logged</span>
-                      )}
+                      {actText || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No activities logged</span>}
                     </td>
 
-                    {/* STATUS — always read-only */}
                     <td style={{ padding: "8px 12px", whiteSpace: "nowrap", width: "110px" }}>
                       {isEmpty
                         ? <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>
@@ -292,58 +216,9 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
                       }
                     </td>
 
-                    {/* REMARKS — editable (dropdown) when unworkable */}
                     <td style={{ padding: "8px 12px", color: "var(--text-muted)", fontSize: "11px", minWidth: "160px" }}>
-                      {isEditing ? (
-                        <div>
-                          {isUnworkable && (
-                            <>
-                              <select
-                                value={editDraft.unworkableReason}
-                                onChange={e => setEditDraft(d => ({ ...d, unworkableReason: e.target.value }))}
-                                style={{ ...inInput, width: "100%", marginBottom: "4px" }}
-                              >
-                                <option value="">— Select reason —</option>
-                                {(unworkableReasons || []).map(r => <option key={r} value={r}>{r}</option>)}
-                                <option value="__other__">Other (specify)</option>
-                              </select>
-                              {editDraft.unworkableReason === "__other__" && (
-                                <input
-                                  value={editDraft.otherReason}
-                                  onChange={e => setEditDraft(d => ({ ...d, otherReason: e.target.value }))}
-                                  placeholder="Specify reason…"
-                                  style={{ ...inInput, width: "100%", marginBottom: "4px" }}
-                                />
-                              )}
-                            </>
-                          )}
-                          <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
-                            <button onClick={() => saveEdit(day)} disabled={editSaving}
-                              style={{ ...inBtn, flex: 1, background: "var(--primary)", color: "#fff" }}>
-                              {editSaving ? "Saving…" : "Save"}
-                            </button>
-                            <button onClick={cancelEdit}
-                              style={{ ...inBtn, background: "transparent", border: "1px solid var(--border-input)", color: "var(--text-secondary)" }}>
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        isUnworkable ? reason : ""
-                      )}
+                      {isUnworkable ? reason : ""}
                     </td>
-
-                    {/* EDIT ACTION — hidden on print */}
-                    {canEdit && (
-                      <td className="no-print" style={{ padding: "6px 8px", textAlign: "center", width: "60px" }}>
-                        {!isEditing && (
-                          <button onClick={() => openEdit(day)} style={{
-                            ...inBtn, background: "var(--bg-secondary)",
-                            border: "1px solid var(--border-main)", color: "var(--text-secondary)",
-                          }}>✏️</button>
-                        )}
-                      </td>
-                    )}
                   </tr>
                 );
               })}
@@ -977,8 +852,6 @@ export default function Logbook() {
 
           {activeTab === "overview" && (
             <ActivitiesOverview
-              teamId={teamId}
-              selectedProjId={selectedProjId}
               selectedProject={selectedProject}
               viewYear={viewYear}
               viewMonth={viewMonth}
@@ -986,10 +859,11 @@ export default function Logbook() {
               dataLoading={dataLoading}
               MONTH_NAMES={MONTH_NAMES}
               weatherMap={weatherMap}
-              canEdit={canEdit}
-              unworkableReasons={unworkableReasons}
-              userProfile={userProfile}
-              onDayUpdated={(key, data) => setDayData(prev => ({ ...prev, [key]: data }))}
+              onNavigateToDay={(day) => {
+                sessionStorage.setItem("logbook_tab", "daily");
+                setActiveTab("daily");
+                openDay(day);
+              }}
             />
           )}
         </>

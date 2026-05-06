@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   collection, query, orderBy, getDocs,
   addDoc, updateDoc, doc, serverTimestamp
@@ -48,6 +49,7 @@ function emptyForm() {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Projects() {
   const { userProfile } = useAuth();
+  const navigate = useNavigate();
   const canEdit = ["admin", "owner", "manager", "supervisor"].includes(userProfile?.role);
   const teamId  = userProfile?.teamId;
 
@@ -419,18 +421,31 @@ export default function Projects() {
                         )
                     }
                   </div>
-                  <button
-                    className={`${styles.toggleBtn} ${isOpen ? styles.toggleOpen : ""}`}
-                    onClick={() => toggleExpand(p.docId)}
-                  >
-                    {isOpen ? "Hide Details" : "Show Details"}
-                    <svg
-                      className={`${styles.chevron} ${isOpen ? styles.chevronUp : ""}`}
-                      width="12" height="12" viewBox="0 0 12 12" fill="none"
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <button
+                      style={{
+                        background: "#378ADD", color: "#fff", border: "none",
+                        padding: "6px 14px", borderRadius: "6px", fontSize: "11px",
+                        fontWeight: "600", cursor: "pointer",
+                        fontFamily: "var(--font-family, Tahoma, Geneva, sans-serif)",
+                      }}
+                      onClick={(e) => { e.stopPropagation(); navigate("/logbook?projectId=" + p.docId); }}
                     >
-                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
+                      📋 Logbook
+                    </button>
+                    <button
+                      className={`${styles.toggleBtn} ${isOpen ? styles.toggleOpen : ""}`}
+                      onClick={() => toggleExpand(p.docId)}
+                    >
+                      {isOpen ? "Hide Details" : "Show Details"}
+                      <svg
+                        className={`${styles.chevron} ${isOpen ? styles.chevronUp : ""}`}
+                        width="12" height="12" viewBox="0 0 12 12" fill="none"
+                      >
+                        <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 {/* ── Expanded Details ── */}

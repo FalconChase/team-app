@@ -12,6 +12,7 @@ import Chat from "./pages/Chat";
 import Records from "./pages/Records";
 import Archive from "./pages/Archive";
 import WeatherTool from "./pages/WeatherTool";
+import Logbook from "./pages/Logbook";
 import { Setup, Pending, Settings, Reports } from "./pages/Misc";
 
 function RequireAuth({ children }) {
@@ -84,6 +85,7 @@ function AppRoutes() {
       <Route path="/records"       element={<ProtectedPage><Records /></ProtectedPage>} />
       <Route path="/archive"       element={<ProtectedPage><Archive /></ProtectedPage>} />
       <Route path="/weather-tool"  element={<ProtectedPage><WeatherTool /></ProtectedPage>} />
+      <Route path="/logbook"       element={<ProtectedPage><Logbook /></ProtectedPage>} />
       <Route path="/settings"      element={<ProtectedPage><Settings /></ProtectedPage>} />
       <Route path="/reports"       element={<ProtectedPage><Reports /></ProtectedPage>} />
 

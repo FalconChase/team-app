@@ -1008,7 +1008,117 @@ function TeamLogSection({ teamId }) {
   );
 }
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 8 — Transfer Ownership (owner-only)
+// SECTION 8 — Logbook Unworkable Reasons
+// ═══════════════════════════════════════════════════════════════════════════════
+function LogbookReasonsSection({ teamId, userProfile }) {
+  const [reasons,    setReasons]    = useState([]);
+  const [newReason,  setNewReason]  = useState("");
+  const [saving,     setSaving]     = useState(false);
+  const [saved,      setSaved]      = useState(false);
+  const [loading,    setLoading]    = useState(true);
+
+  const canEditReasons = ["owner", "admin"].includes(userProfile?.role);
+
+  useEffect(() => {
+    if (!teamId) return;
+    getDoc(doc(db, "logbookSettings", teamId))
+      .then(snap => {
+        if (snap.exists() && snap.data().reasons?.length) {
+          setReasons(snap.data().reasons);
+        } else {
+          setReasons(["Rain", "Holiday", "Sunday", "Suspension of Work"]);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [teamId]);
+
+  function addReason() {
+    const t = newReason.trim();
+    if (!t || reasons.includes(t)) return;
+    setReasons(r => [...r, t]);
+    setNewReason("");
+  }
+
+  function removeReason(index) {
+    setReasons(r => r.filter((_, i) => i !== index));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, "logbookSettings", teamId), { reasons }, { merge: true });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("Failed to save logbook settings:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={S.section}>
+      <div style={S.sTitle}>📋 Logbook Unworkable Reasons</div>
+      <div style={S.sDesc}>
+        Preset reasons for marking a day as unworkable in the Construction Logbook.
+        {!canEditReasons && " Read only — owner/admin access required to edit."}
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: "12px", color: "var(--text-disabled)" }}>Loading…</div>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "14px" }}>
+            {reasons.map((r, i) => (
+              <div key={r} style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: "var(--bg-secondary)", borderRadius: "6px",
+                padding: "5px 10px", fontSize: "12px", fontWeight: "500", color: "var(--text-primary)",
+                border: "0.5px solid var(--border-main)",
+              }}>
+                {r}
+                {canEditReasons && (
+                  <button
+                    style={{ ...S.iconBtn(true), padding: "1px 5px", fontSize: "10px" }}
+                    onClick={() => removeReason(i)}
+                  >✕</button>
+                )}
+              </div>
+            ))}
+            {reasons.length === 0 && (
+              <div style={{ fontSize: "12px", color: "var(--text-disabled)" }}>No reasons defined.</div>
+            )}
+          </div>
+
+          {canEditReasons && (
+            <>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  style={{ ...S.input, flex: 1 }}
+                  value={newReason}
+                  placeholder="New reason (e.g. Rain, Holiday)…"
+                  onChange={e => setNewReason(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addReason(); }}
+                />
+                <button style={S.btn(true, false, true)} onClick={addReason}>+ Add</button>
+              </div>
+              <div style={S.saveBar}>
+                {saved && <span style={{ fontSize: "11px", color: "var(--success)", alignSelf: "center" }}>✓ Saved</span>}
+                <button style={S.btn(true)} onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving…" : "Save Reasons"}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 9 — Transfer Ownership (owner-only)
 // ═══════════════════════════════════════════════════════════════════════════════
 function TransferOwnershipSection({ members, currentUser, transferOwnership }) {
   const adminCandidates = members.filter(
@@ -1212,6 +1322,8 @@ export function Settings() {
         prefs={notifPrefs}
         onSave={saveNotifPrefs}
       />
+
+      <LogbookReasonsSection teamId={userProfile?.teamId} userProfile={userProfile} />
 
       {/* ADDED: Team Log — admin only, read only, bottom of settings */}
       <TeamLogSection teamId={userProfile?.teamId} />

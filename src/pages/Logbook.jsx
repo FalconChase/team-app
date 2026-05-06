@@ -51,6 +51,7 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
 
   // Print styles injected into <head> via a style tag — only active during window.print()
   const printStyle = `
+    #logbook-overview-print .print-header { display: none; }
     @media print {
       body * { visibility: hidden !important; }
       #logbook-overview-print, #logbook-overview-print * { visibility: visible !important; }
@@ -59,9 +60,12 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
       #logbook-overview-print table { width: 100%; border-collapse: collapse; font-size: 9pt; font-family: Arial, sans-serif; }
       #logbook-overview-print th, #logbook-overview-print td { border: 1px solid #333; padding: 4px 6px; text-align: left; vertical-align: top; }
       #logbook-overview-print th { background: #e8edf5 !important; -webkit-print-color-adjust: exact; font-weight: 700; font-size: 8pt; }
-      #logbook-overview-print .print-header { margin-bottom: 10px; font-family: Arial, sans-serif; }
-      #logbook-overview-print .print-header h2 { font-size: 13pt; margin: 0 0 2px; }
-      #logbook-overview-print .print-header p { font-size: 9pt; margin: 0; }
+      #logbook-overview-print .print-header { display: block !important; margin-bottom: 14px; font-family: Arial, sans-serif; border-bottom: 2px solid #333; padding-bottom: 8px; }
+      #logbook-overview-print .print-header h1 { font-size: 16pt; font-weight: 700; margin: 0 0 6px; letter-spacing: 1px; text-transform: uppercase; }
+      #logbook-overview-print .print-header .meta { display: flex; gap: 32px; font-size: 9pt; margin: 0; }
+      #logbook-overview-print .print-header .meta-item { display: flex; flex-direction: column; }
+      #logbook-overview-print .print-header .meta-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
+      #logbook-overview-print .print-header .meta-value { font-size: 9pt; font-weight: 600; color: #111; }
       #logbook-overview-print .no-print { display: none !important; }
       #logbook-overview-print .status-w { color: #2e7d32; font-weight: 600; }
       #logbook-overview-print .status-u { color: #c62828; font-weight: 600; }
@@ -97,10 +101,23 @@ function ActivitiesOverview({ teamId, selectedProjId, selectedProject, viewYear,
         </button>
       </div>
 
-      {/* Print header — visible on print only, hidden on screen */}
-      <div className="print-header" style={{ display: "none" }}>
-        <h2>Construction Logbook — Activities Overview</h2>
-        <p>Project: {projectLabel} &nbsp;|&nbsp; Month: {MONTH_NAMES[viewMonth]} {viewYear}</p>
+      {/* Print header — hidden on screen via CSS, visible on print */}
+      <div className="print-header">
+        <h1>Activity Logs</h1>
+        <div className="meta">
+          <div className="meta-item">
+            <span className="meta-label">Project ID</span>
+            <span className="meta-value">{selectedProject?.projectId || "—"}</span>
+          </div>
+          <div className="meta-item">
+            <span className="meta-label">Project Name</span>
+            <span className="meta-value">{selectedProject?.projectName || "—"}</span>
+          </div>
+          <div className="meta-item">
+            <span className="meta-label">Month</span>
+            <span className="meta-value">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+          </div>
+        </div>
       </div>
 
       {/* Table */}

@@ -239,18 +239,33 @@ export default function Logbook() {
       .catch(console.error)
       .finally(() => setDataLoading(false));
 
-    getDocs(query(collection(db, "teams", teamId, "weatherLogs"), where("month", "==", ym)))
+    getDocs(query(
+      collection(db, "teams", teamId, "weatherLogs"),
+      where("contractInfo.month", "==", MONTH_NAMES[viewMonth]),
+      where("contractInfo.year",  "==", String(viewYear)),
+      orderBy("savedAt", "desc")
+    ))
       .then(snap => {
         const wmap = {};
-        snap.docs.forEach(d => {
-          const data = d.data();
-          if (data.dailyData) {
-            Object.entries(data.dailyData).forEach(([day, dw]) => {
-              const w = typeof dw === "string" ? dw : (dw?.am || dw?.condition || dw?.weather || "");
-              if (w) wmap[String(parseInt(day, 10))] = w;
+        if (!snap.empty) {
+          // Use the most recently saved snapshot for this month
+          const data = snap.docs[0].data();
+          const WEATHER_LABELS = { 1: "FAIR", 2: "CLOUDY", 3: "RAIN SHOWER", 4: "HEAVY RAIN" };
+          if (Array.isArray(data.weatherData)) {
+            data.weatherData.forEach((rowStr, idx) => {
+              const day = idx + 1; // index 0 = day 1
+              if (day > getDaysInMonth(viewYear, viewMonth)) return;
+              const values = rowStr.split(",").map(Number).filter(v => v > 0);
+              if (values.length === 0) return;
+              // Find dominant weather type (most frequent non-zero value)
+              const freq = {};
+              values.forEach(v => { freq[v] = (freq[v] || 0) + 1; });
+              const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+              const label = WEATHER_LABELS[Number(dominant)];
+              if (label) wmap[String(day)] = label;
             });
           }
-        });
+        }
         setWeatherMap(wmap);
       })
       .catch(console.error);

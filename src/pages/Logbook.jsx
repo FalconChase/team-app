@@ -244,12 +244,14 @@ export default function Logbook() {
       .catch(console.error)
       .finally(() => setDataLoading(false));
 
-    getDocs(query(
-      collection(db, "teams", teamId, "weatherLogs"),
+    const projContractId = projects.find(p => p.docId === selectedProjId)?.projectId || "";
+    const wlogConstraints = [
       where("contractInfo.month", "==", MONTH_NAMES[viewMonth]),
       where("contractInfo.year",  "==", String(viewYear)),
-      orderBy("savedAt", "desc")
-    ))
+      ...(projContractId ? [where("contractInfo.contractId", "==", projContractId)] : []),
+      orderBy("savedAt", "desc"),
+    ];
+    getDocs(query(collection(db, "teams", teamId, "weatherLogs"), ...wlogConstraints))
       .then(snap => {
         const wmap = {};
         if (!snap.empty) {
@@ -271,7 +273,7 @@ export default function Logbook() {
         setWeatherMap(wmap);
       })
       .catch(console.error);
-  }, [teamId, selectedProjId, viewYear, viewMonth]);
+  }, [teamId, selectedProjId, viewYear, viewMonth, projects]);
 
   // ── Month navigation ──────────────────────────────────────────────────────
   function canGoPrev() {
@@ -377,8 +379,12 @@ export default function Logbook() {
   const firstDow         = getFirstDow(viewYear, viewMonth);
   const cells            = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
   const isCurrentMonth   = viewYear === todayYear && viewMonth === todayMonth;
-  const totalWorkable    = Object.values(dayData).filter(d => d.workable === true).length;
-  const totalUnworkable  = Object.values(dayData).filter(d => d.workable === false).length;
+  // Merge weatherMap into dayData for stat counts: saved Logbook entries take priority
+  const mergedDayStats = { ...Object.fromEntries(
+    Object.entries(weatherMap).map(([k, snap]) => [k, { workable: snap.workable }])
+  ), ...dayData };
+  const totalWorkable    = Object.values(mergedDayStats).filter(d => d.workable === true).length;
+  const totalUnworkable  = Object.values(mergedDayStats).filter(d => d.workable === false).length;
   const daysWithAct      = Object.values(dayData).filter(d => d.activities?.length > 0).length;
   const daysRemaining    = isCurrentMonth ? Math.max(0, daysInMonth - todayDay) : "—";
 

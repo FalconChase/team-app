@@ -17,9 +17,10 @@ const NAV = [
 
 export default function Layout({ children }) {
   const { userProfile, logout } = useAuth();
-  const { team, pendingRequests, isAdmin } = useTeam();
+  const { team, pendingRequests, isAdmin, viewingTeamId, isGuestView, guestPermissions, guestTeamsList, setViewingTeam } = useTeam();
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen,     setMenuOpen]     = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("sidebarOpen") !== "false");
 
   async function handleLogout() {
@@ -61,6 +62,21 @@ export default function Layout({ children }) {
 
   const initials = userProfile?.displayName?.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "?";
 
+  // The team shown in the sidebar header — own team or the guest team being viewed
+  const displayTeam = isGuestView
+    ? guestTeamsList.find(t => t.teamId === viewingTeamId)
+    : team;
+
+  // Nav items visible in the current view
+  const TAB_TO_PATH = { records: "/records", projects: "/projects", logbook: "/logbook", documents: "/documents", announcements: "/announcements", members: "/members", chat: "/chat" };
+  const visibleNav = isGuestView
+    ? NAV.filter(n => {
+        if (n.path === "/") return true; // Dashboard always visible
+        const tab = Object.entries(TAB_TO_PATH).find(([, p]) => p === n.path)?.[0];
+        return tab && (guestPermissions?.allowedTabs || []).includes(tab);
+      })
+    : NAV;
+
   return (
     <div style={s.shell}>
 
@@ -69,11 +85,92 @@ export default function Layout({ children }) {
         <div style={s.sidebarHeader}>
           <div style={s.logo}>
             TEAM APP
-            <span style={s.logosub}>{team?.department || "Loading..."} — {team?.name || ""}</span>
+            <span style={s.logosub}>{displayTeam?.department || "Loading..."} — {displayTeam?.name || ""}</span>
           </div>
+
+          {/* ── Team switcher (only when guest links exist) ── */}
+          {(guestTeamsList.length > 0) && (
+            <div style={{ position: "relative", marginTop: "10px" }}>
+              <button
+                onClick={() => setSwitcherOpen(o => !o)}
+                style={{
+                  width: "100%", background: isGuestView ? "rgba(55,138,221,0.2)" : "rgba(255,255,255,0.08)",
+                  border: isGuestView ? "1px solid rgba(55,138,221,0.5)" : "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: "6px", padding: "6px 10px", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  color: "#fff", fontSize: "11px", fontFamily: "Tahoma,Geneva,sans-serif",
+                }}
+              >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {isGuestView
+                    ? (displayTeam?.department || "Guest View")
+                    : (team?.department || "Home")}
+                </span>
+                <span style={{ marginLeft: "6px", opacity: 0.7 }}>▾</span>
+              </button>
+
+              {switcherOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+                  background: "#1a3a5c", borderRadius: "7px", border: "1px solid rgba(255,255,255,0.15)",
+                  boxShadow: "0 6px 20px rgba(0,0,0,0.4)", zIndex: 300, overflow: "hidden",
+                }}>
+                  {/* Own team */}
+                  <button
+                    onClick={() => { setViewingTeam(team?.id || userProfile?.teamId); setSwitcherOpen(false); }}
+                    style={{
+                      width: "100%", padding: "9px 12px", background: !isGuestView ? "rgba(55,138,221,0.2)" : "transparent",
+                      border: "none", borderBottom: "1px solid rgba(255,255,255,0.08)",
+                      color: "#fff", fontSize: "11px", fontFamily: "Tahoma,Geneva,sans-serif",
+                      cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "8px",
+                    }}
+                  >
+                    <span style={{ opacity: !isGuestView ? 1 : 0 }}>✓</span>
+                    <span>
+                      <span style={{ display: "block", fontWeight: "600" }}>{team?.department || "Home"}</span>
+                      <span style={{ fontSize: "10px", opacity: 0.6 }}>Your team</span>
+                    </span>
+                  </button>
+
+                  {/* Guest teams */}
+                  {guestTeamsList.map(gt => (
+                    <button
+                      key={gt.teamId}
+                      onClick={() => { setViewingTeam(gt.teamId); setSwitcherOpen(false); }}
+                      style={{
+                        width: "100%", padding: "9px 12px",
+                        background: viewingTeamId === gt.teamId ? "rgba(55,138,221,0.2)" : "transparent",
+                        border: "none", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        color: "#fff", fontSize: "11px", fontFamily: "Tahoma,Geneva,sans-serif",
+                        cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: "8px",
+                      }}
+                    >
+                      <span style={{ opacity: viewingTeamId === gt.teamId ? 1 : 0 }}>✓</span>
+                      <span>
+                        <span style={{ display: "block", fontWeight: "600" }}>{gt.department}</span>
+                        <span style={{ fontSize: "10px", opacity: 0.6 }}>Guest access</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Guest view indicator strip ── */}
+          {isGuestView && (
+            <div style={{
+              marginTop: "8px", background: "rgba(55,138,221,0.15)",
+              borderRadius: "5px", padding: "4px 8px",
+              fontSize: "10px", color: "#7ab3e0", letterSpacing: "0.3px",
+            }}>
+              {guestPermissions?.canEdit ? "👁 Guest — limited edit" : "👁 Guest — read only"}
+            </div>
+          )}
         </div>
+
         <nav style={s.navList}>
-          {NAV.map(n => (
+          {visibleNav.map(n => (
             <NavLink
               key={n.path}
               to={n.path}
@@ -87,7 +184,7 @@ export default function Layout({ children }) {
             >
               <span style={{ fontSize: "14px" }}>{n.icon}</span>
               {n.label}
-              {n.path === "/members" && isAdmin() && pendingRequests.length > 0 && (
+              {n.path === "/members" && isAdmin() && !isGuestView && pendingRequests.length > 0 && (
                 <span style={s.pendingBadge}>{pendingRequests.length}</span>
               )}
             </NavLink>

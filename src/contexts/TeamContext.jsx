@@ -16,6 +16,9 @@ export function TeamProvider({ children }) {
   const [team,            setTeam]            = useState(null);
   const [members,         setMembers]         = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [viewingTeamId,   setViewingTeamId]   = useState(null);
+  const [guestPermissions,setGuestPermissions]= useState(null);
+  const [guestTeamsList,  setGuestTeamsList]  = useState([]);
 
 // Derive admin flag from userProfile directly — stable, no function reference
   const adminRoles = ["admin", "owner", "manager", "supervisor"];
@@ -67,6 +70,39 @@ export function TeamProvider({ children }) {
     });
     return unsub;
   }, [userProfile?.teamId, userIsAdmin]);
+
+  // ── Guest viewing state ────────────────────────────────────────────────────
+
+  // Keep viewingTeamId in sync when user's own team loads (covers login + refresh)
+  useEffect(() => {
+    if (userProfile?.teamId && !viewingTeamId) setViewingTeamId(userProfile.teamId);
+  }, [userProfile?.teamId]);
+
+  // Load the guestAccess permissions doc whenever the viewed team changes
+  useEffect(() => {
+    if (!viewingTeamId || viewingTeamId === userProfile?.teamId) {
+      setGuestPermissions(null);
+      return;
+    }
+    getDoc(doc(db, "teams", viewingTeamId, "guestAccess", userProfile.uid))
+      .then(snap => setGuestPermissions(snap.exists() ? snap.data() : null));
+  }, [viewingTeamId, userProfile?.uid]);
+
+  // Load summary list of guest teams (name + dept) for the switcher dropdown
+  useEffect(() => {
+    const ids = userProfile?.guestTeams || [];
+    if (!ids.length) { setGuestTeamsList([]); return; }
+    Promise.all(ids.map(async id => {
+      const snap = await getDoc(doc(db, "teams", id));
+      return snap.exists() ? { teamId: id, ...snap.data() } : null;
+    })).then(results => setGuestTeamsList(results.filter(Boolean)));
+  }, [(userProfile?.guestTeams || []).join(",")]); // eslint-disable-line
+
+  function setViewingTeam(teamId) {
+    setViewingTeamId(teamId);
+  }
+
+  const isGuestView = !!viewingTeamId && viewingTeamId !== userProfile?.teamId;
 
   // ── Team actions ───────────────────────────────────────────────────────────
   async function createTeam(teamName, departmentName) {
@@ -297,6 +333,12 @@ export function TeamProvider({ children }) {
       unlinkGuest,
       revokeGuestAccess,
       updateGuestPermissions,
+      // Guest viewing
+      viewingTeamId,
+      isGuestView,
+      guestPermissions,
+      guestTeamsList,
+      setViewingTeam,
     }}>
       {children}
     </TeamContext.Provider>

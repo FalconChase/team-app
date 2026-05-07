@@ -1544,6 +1544,172 @@ function TransferOwnershipSection({ members, currentUser, transferOwnership }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN Settings page
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 11 — Guest Link (requesting side — all members)
+// ═══════════════════════════════════════════════════════════════════════════════
+function GuestLinkSection({ userProfile }) {
+  const { getTeamByGuestInviteCode, linkAsGuest, unlinkGuest } = useTeam();
+
+  const [code,          setCode]          = useState("");
+  const [preview,       setPreview]       = useState(null);
+  const [looking,       setLooking]       = useState(false);
+  const [linking,       setLinking]       = useState(false);
+  const [error,         setError]         = useState("");
+  const [success,       setSuccess]       = useState("");
+  const [linkedTeams,   setLinkedTeams]   = useState([]);
+  const [loadingLinked, setLoadingLinked] = useState(true);
+  const [unlinking,     setUnlinking]     = useState(null);
+
+  const guestTeamIds = userProfile?.guestTeams || [];
+
+  useEffect(() => {
+    if (!guestTeamIds.length) { setLinkedTeams([]); setLoadingLinked(false); return; }
+    setLoadingLinked(true);
+    Promise.all(
+      guestTeamIds.map(async (teamId) => {
+        const [teamSnap, accessSnap] = await Promise.all([
+          getDoc(doc(db, "teams", teamId)),
+          getDoc(doc(db, "teams", teamId, "guestAccess", userProfile.uid)),
+        ]);
+        if (!teamSnap.exists()) return null;
+        const access = accessSnap.exists() ? accessSnap.data() : null;
+        if (access?.status !== "active") return null;
+        return { teamId, ...teamSnap.data(), access };
+      })
+    ).then(results => {
+      setLinkedTeams(results.filter(Boolean));
+      setLoadingLinked(false);
+    });
+  }, [guestTeamIds.join(",")]); // eslint-disable-line
+
+  async function handleLookup(e) {
+    e.preventDefault();
+    setError(""); setPreview(null); setSuccess(""); setLooking(true);
+    try {
+      const found = await getTeamByGuestInviteCode(code.trim());
+      if (!found) setError("Invalid guest invite code. Check with the department admin.");
+      else setPreview(found);
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    }
+    setLooking(false);
+  }
+
+  async function handleLink() {
+    setLinking(true); setError("");
+    try {
+      await linkAsGuest(code.trim());
+      setSuccess(`Linked! You now have guest access to ${preview.name}.`);
+      setCode(""); setPreview(null);
+    } catch (err) {
+      setError(err.message || "Failed to link. Please try again.");
+    }
+    setLinking(false);
+  }
+
+  async function handleUnlink(teamId) {
+    setUnlinking(teamId);
+    try { await unlinkGuest(teamId); }
+    catch (err) { setError(err.message || "Failed to unlink."); }
+    setUnlinking(null);
+  }
+
+  const perms = preview?.guestPermissions || DEFAULT_GUEST_PERMISSIONS;
+
+  return (
+    <div style={S.section}>
+      <div style={S.sTitle}>🔗 Cross-Department Access</div>
+      <div style={S.sDesc}>
+        Link to another department's team to view their shared data. You'll need their guest invite code.
+      </div>
+
+      {/* ── Code lookup form ─────────────────────────────────── */}
+      <form onSubmit={handleLookup}>
+        <label style={S.label}>Guest Invite Code</label>
+        <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+          <input
+            style={{ ...S.input, fontFamily: "monospace", letterSpacing: "2px", textTransform: "uppercase", flex: 1 }}
+            value={code}
+            onChange={e => { setCode(e.target.value); setPreview(null); setError(""); setSuccess(""); }}
+            placeholder="e.g. G-AB3XKP"
+            maxLength={10}
+          />
+          <button type="submit" style={S.btn(true, false, false)} disabled={looking || !code.trim()}>
+            {looking ? "Looking up…" : "Look Up"}
+          </button>
+        </div>
+      </form>
+
+      {error  && <div style={{ fontSize: "12px", color: "var(--danger)", marginBottom: "10px" }}>{error}</div>}
+      {success && <div style={{ fontSize: "12px", color: "var(--success, #059669)", background: "var(--success-bg, #ecfdf5)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px" }}>{success}</div>}
+
+      {/* ── Preview ──────────────────────────────────────────── */}
+      {preview && (
+        <div style={{
+          background: "var(--primary-light)", border: "1px solid var(--primary-border)",
+          borderRadius: "8px", padding: "14px 16px", marginBottom: "12px",
+        }}>
+          <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "4px" }}>
+            {preview.name}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "10px" }}>
+            {preview.department}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "6px" }}>You will get access to:</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "12px" }}>
+            {(perms.allowedTabs || []).map(t => <span key={t} style={S.pill("var(--primary)")}>{t}</span>)}
+            {!(perms.allowedTabs || []).length && <span style={{ fontSize: "11px", color: "var(--text-disabled)" }}>No tabs configured</span>}
+            <span style={S.pill(perms.canEdit ? "#059669" : "#6b7280")}>
+              {perms.canEdit ? "can edit selected tabs" : "read-only"}
+            </span>
+          </div>
+          <button style={S.btn(true)} onClick={handleLink} disabled={linking}>
+            {linking ? "Linking…" : `Confirm — Link to ${preview.name}`}
+          </button>
+        </div>
+      )}
+
+      {/* ── Currently linked teams ────────────────────────────── */}
+      {guestTeamIds.length > 0 && (
+        <>
+          <div style={S.divider} />
+          <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "10px" }}>
+            Your Guest Links {!loadingLinked && `(${linkedTeams.length})`}
+          </div>
+
+          {loadingLinked ? (
+            <div style={{ fontSize: "12px", color: "var(--text-disabled)" }}>Loading…</div>
+          ) : linkedTeams.length === 0 ? (
+            <div style={{ fontSize: "12px", color: "var(--text-disabled)" }}>No active guest links.</div>
+          ) : (
+            linkedTeams.map(t => (
+              <div key={t.teamId} style={S.memberRow}>
+                <div>
+                  <div style={S.memberName}>{t.name}</div>
+                  <div style={S.memberMeta}>{t.department}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                    {(t.access?.allowedTabs || []).map(tab => <span key={tab} style={S.pill("var(--primary)")}>{tab}</span>)}
+                    <span style={S.pill(t.access?.canEdit ? "#059669" : "#6b7280")}>
+                      {t.access?.canEdit ? "can edit" : "read-only"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  style={S.btn(false, true, true)}
+                  onClick={() => handleUnlink(t.teamId)}
+                  disabled={unlinking === t.teamId}
+                >
+                  {unlinking === t.teamId ? "…" : "Unlink"}
+                </button>
+              </div>
+            ))
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function Settings() {
   const { userProfile }                               = useAuth();
   const { team, members, isAdmin, isOwner,            // ADDED: isOwner
@@ -1566,13 +1732,15 @@ export function Settings() {
     return unsub;
   }, [userProfile?.teamId]);
 
-  // ── Guard: admin only ──────────────────────────────────────────────────────
+  // ── Non-admin: show only the guest link panel ─────────────────────────────
   if (!isAdmin()) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-disabled)", fontFamily: "Tahoma,Geneva,sans-serif" }}>
-        <div style={{ fontSize: "32px", marginBottom: "12px" }}>🔒</div>
-        <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-secondary)" }}>Admin access only</div>
-        <div style={{ fontSize: "12px", marginTop: "6px" }}>You need admin privileges to access Settings.</div>
+      <div style={S.page}>
+        <div style={S.header}>
+          <div style={S.title}>Settings</div>
+          <div style={S.sub}>Cross-department access is available to all members.</div>
+        </div>
+        <GuestLinkSection userProfile={userProfile} />
       </div>
     );
   }
@@ -1636,6 +1804,8 @@ export function Settings() {
       <LogbookReasonsSection teamId={userProfile?.teamId} userProfile={userProfile} />
 
       <GuestAccessSection team={team} teamId={userProfile?.teamId} />
+
+      <GuestLinkSection userProfile={userProfile} />
 
       {/* ADDED: Team Log — admin only, read only, bottom of settings */}
       <TeamLogSection teamId={userProfile?.teamId} />

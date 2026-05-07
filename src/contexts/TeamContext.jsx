@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import {
   doc, updateDoc, collection, query,
-  where, onSnapshot, getDocs, serverTimestamp, addDoc, getDoc // ✅ added getDoc (was missing from imports, used in approveRequest etc)
+  where, onSnapshot, getDocs, serverTimestamp, addDoc, getDoc,
+  setDoc, arrayUnion, arrayRemove
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "./AuthContext";
@@ -76,6 +77,7 @@ export function TeamProvider({ children }) {
       createdAt: serverTimestamp(),
       createdBy: userProfile.uid,
       inviteCode: Math.random().toString(36).substring(2, 10).toUpperCase(),
+      guestInviteCode: "G-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
     });
     await updateDoc(doc(db, "users", userProfile.uid), {
       teamId: teamRef.id,
@@ -191,6 +193,89 @@ export function TeamProvider({ children }) {
     }
   }
 
+  // ── Guest access functions ─────────────────────────────────────────────────
+
+  async function regenerateGuestInviteCode() {
+    if (!userProfile?.teamId) return;
+    const newCode = "G-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+    await updateDoc(doc(db, "teams", userProfile.teamId), { guestInviteCode: newCode });
+  }
+
+  async function getTeamByGuestInviteCode(code) {
+    const q = query(collection(db, "teams"), where("guestInviteCode", "==", code.toUpperCase().trim()));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+  }
+
+  async function linkAsGuest(code) {
+    const hostTeam = await getTeamByGuestInviteCode(code);
+    if (!hostTeam) throw new Error("Invalid guest invite code. Please check with the department admin.");
+    if (hostTeam.id === userProfile.teamId) throw new Error("You can't request guest access to your own team.");
+
+    const existingSnap = await getDoc(doc(db, "teams", hostTeam.id, "guestAccess", userProfile.uid));
+    if (existingSnap.exists() && existingSnap.data().status === "active") {
+      throw new Error(`You already have guest access to ${hostTeam.name}.`);
+    }
+
+    const permissions = hostTeam.guestPermissions || {
+      allowedTabs: ["records"],
+      allowedRecordTypes: null,
+      canEdit: false,
+      editableTabs: [],
+      editableRecordTypes: [],
+    };
+
+    await setDoc(doc(db, "teams", hostTeam.id, "guestAccess", userProfile.uid), {
+      guestUserId: userProfile.uid,
+      guestDisplayName: userProfile.displayName,
+      guestDepartment: team?.department || "Unknown",
+      linkedAt: serverTimestamp(),
+      status: "active",
+      isCustomized: false,
+      ...permissions,
+    });
+
+    await updateDoc(doc(db, "users", userProfile.uid), {
+      guestTeams: arrayUnion(hostTeam.id),
+    });
+
+    return hostTeam;
+  }
+
+  async function unlinkGuest(hostTeamId) {
+    await updateDoc(doc(db, "teams", hostTeamId, "guestAccess", userProfile.uid), {
+      status: "revoked",
+    });
+    await updateDoc(doc(db, "users", userProfile.uid), {
+      guestTeams: arrayRemove(hostTeamId),
+    });
+  }
+
+  async function revokeGuestAccess(guestUserId) {
+    if (!userProfile?.teamId) return;
+    await updateDoc(doc(db, "teams", userProfile.teamId, "guestAccess", guestUserId), {
+      status: "revoked",
+    });
+    await updateDoc(doc(db, "users", guestUserId), {
+      guestTeams: arrayRemove(userProfile.teamId),
+    });
+    await logAction({
+      teamId: userProfile.teamId,
+      action: "Revoked guest access",
+      category: "guest",
+      performedBy: userProfile.displayName || userProfile.email,
+    });
+  }
+
+  async function updateGuestPermissions(guestUserId, overrides) {
+    if (!userProfile?.teamId) return;
+    await updateDoc(doc(db, "teams", userProfile.teamId, "guestAccess", guestUserId), {
+      ...overrides,
+      isCustomized: true,
+    });
+  }
+
   async function getTeamByInviteCode(code) {
     const q = query(collection(db, "teams"), where("inviteCode", "==", code.toUpperCase()));
     const snap = await getDocs(q);
@@ -200,11 +285,18 @@ export function TeamProvider({ children }) {
 
   return (
     <TeamContext.Provider value={{
-      team, members, pendingRequests, isAdmin, isOwner, // ADDED: isOwner exposed
+      team, members, pendingRequests, isAdmin, isOwner,
       createTeam, approveRequest, rejectRequest,
       removeMember, grantAdmin, revokeAdmin,
-      transferOwnership, // ADDED: transferOwnership exposed
+      transferOwnership,
       updateTeamSettings, getTeamByInviteCode,
+      // Guest access
+      regenerateGuestInviteCode,
+      getTeamByGuestInviteCode,
+      linkAsGuest,
+      unlinkGuest,
+      revokeGuestAccess,
+      updateGuestPermissions,
     }}>
       {children}
     </TeamContext.Provider>

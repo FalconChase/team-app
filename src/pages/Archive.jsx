@@ -154,9 +154,10 @@ function RestoreAuthModal({ document: d, teamId, userProfile, onSuccess, onClose
 // Archive Page
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Archive() {
-  const { userProfile }      = useAuth();
-  const { isAdmin, members } = useTeam();
-  const navigate             = useNavigate();
+  const { userProfile }                                          = useAuth();
+  const { isAdmin, members, viewingTeamId, isGuestView }        = useTeam();
+  const navigate                                                 = useNavigate();
+  const teamId = viewingTeamId || userProfile?.teamId;
 
   const [archivedDocs,    setArchivedDocs]    = useState([]);
   const [projects,        setProjects]        = useState([]);
@@ -174,25 +175,25 @@ export default function Archive() {
 
   // ── Firestore: archived docs ───────────────────────────────────────────────
   useEffect(() => {
-    if (!userProfile?.teamId) return;
+    if (!teamId) return;
     const q = query(
       collection(db, "papers"),
-      where("teamId", "==", userProfile.teamId),
+      where("teamId", "==", teamId),
       where("status", "==", "ARCHIVED")
     );
     return onSnapshot(q, snap => {
       setArchivedDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   // ── Firestore: projects ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = collection(db, "teams", userProfile.teamId, "projects");
+    if (!teamId) return;
+    const q = collection(db, "teams", teamId, "projects");
     return onSnapshot(q, snap => {
       setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   // ── Group archived docs by project ────────────────────────────────────────
   const projectGroups = projects
@@ -235,7 +236,7 @@ export default function Archive() {
 
     // ── Audit log ────────────────────────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Edited archive date for "${d.subject || d.id}" to ${newDate}`,
       category:    "record",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -288,7 +289,7 @@ export default function Archive() {
       {restoreTarget && (
         <RestoreAuthModal
           document={restoreTarget}
-          teamId={userProfile.teamId}
+          teamId={teamId}
           userProfile={userProfile}
           onSuccess={handleRestoreSuccess}
           onClose={() => setRestoreTarget(null)}

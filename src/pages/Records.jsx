@@ -149,7 +149,7 @@ function DocumentRows({ docs, setForm, readOnly }) {
 }
 
 // ─── RecordModal ──────────────────────────────────────────────────────────────
-function RecordModal({ mode, record, projects, members, departments, teamId, userProfile, onClose, onSaved }) {
+function RecordModal({ mode, record, projects, members, departments, teamId, userProfile, onClose, onSaved, performer, isGuestView }) {
   const isView   = mode === "view";
   const isEdit   = mode === "edit";
   const isCreate = mode === "create";
@@ -202,28 +202,28 @@ function RecordModal({ mode, record, projects, members, departments, teamId, use
     setSaving(true); setError("");
     try {
       if (isCreate) {
-        payload.createdBy = userProfile.displayName || userProfile.email;
+        payload.createdBy = performer || userProfile.displayName || userProfile.email;
         payload.createdAt = serverTimestamp();
         await addDoc(collection(db, "records"), payload);
-        // ── Patch: log "added record" ──────────────────────────────────────
         logAction({
           teamId,
           action:      "added record",
           category:    "record",
-          performedBy: userProfile.displayName || userProfile.email || "Unknown",
+          performedBy: performer || userProfile.displayName || userProfile.email || "Unknown",
           targetName:  projects.find(p => p.id === form.projectId)?.projectId || form.projectId || null,
+          isGuest:     !!isGuestView,
         });
       } else {
-        payload.lastModifiedBy = userProfile.displayName || userProfile.email;
+        payload.lastModifiedBy = performer || userProfile.displayName || userProfile.email;
         payload.lastModifiedAt = serverTimestamp();
         await updateDoc(doc(db, "records", record.id), payload);
-        // ── Patch: log "edited record" ─────────────────────────────────────
         logAction({
           teamId,
           action:      "edited record",
           category:    "record",
-          performedBy: userProfile.displayName || userProfile.email || "Unknown",
+          performedBy: performer || userProfile.displayName || userProfile.email || "Unknown",
           targetName:  projects.find(p => p.id === form.projectId)?.projectId || form.projectId || null,
+          isGuest:     !!isGuestView,
         });
       }
       onSaved(); onClose();
@@ -402,8 +402,15 @@ function DeleteConfirm({ record, onClose, onConfirm }) {
 // Records Page
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Records() {
-  const { userProfile }            = useAuth();
-  const { team, members, isAdmin } = useTeam();
+  const { userProfile }                                              = useAuth();
+  const { team, members, isAdmin, viewingTeamId, isGuestView, guestPermissions } = useTeam();
+  const teamId   = viewingTeamId || userProfile?.teamId;
+  const performer = isGuestView
+    ? `${userProfile?.displayName} (${team?.department || "Guest"})`
+    : (userProfile?.displayName || userProfile?.email || "Unknown");
+  const adminUser  = isGuestView
+    ? (guestPermissions?.canEdit && (guestPermissions?.editableTabs || []).includes("records"))
+    : isAdmin();
   const navigate                   = useNavigate();
 
   const [records,       setRecords]       = useState([]);
@@ -422,31 +429,31 @@ export default function Records() {
 
   // ── Firestore: records ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = query(collection(db, "records"), where("teamId", "==", userProfile.teamId), orderBy("date", "desc"));
+    if (!teamId) return;
+    const q = query(collection(db, "records"), where("teamId", "==", teamId), orderBy("date", "desc"));
     return onSnapshot(q, snap => {
       setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   // ── Firestore: projects ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = collection(db, "teams", userProfile.teamId, "projects");
+    if (!teamId) return;
+    const q = collection(db, "teams", teamId, "projects");
     return onSnapshot(q, snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   // ── Firestore: archived doc count ─────────────────────────────────────────
   useEffect(() => {
-    if (!userProfile?.teamId) return;
+    if (!teamId) return;
     const q = query(
       collection(db, "papers"),
-      where("teamId", "==", userProfile.teamId),
+      where("teamId", "==", teamId),
       where("status", "==", "ARCHIVED")
     );
     return onSnapshot(q, snap => setArchivedCount(snap.size));
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   const filtered = records.filter(r => {
     if (filterType    !== "All" && r.type      !== filterType)    return false;
@@ -459,11 +466,13 @@ export default function Records() {
     await deleteDoc(doc(db, "records", id));
     // ── Patch: log "deleted record" ─────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId,
       action:      "deleted record",
       category:    "record",
-      performedBy: userProfile.displayName || userProfile.email || "Unknown",
+      performedBy: performer,
       targetName:  null,
+      isGuest:     isGuestView,
+      guestDepartment: isGuestView ? team?.department : null,
     });
   }
 
@@ -472,7 +481,6 @@ export default function Records() {
     return p?.projectId || p?.name || projectId || "—";
   }
 
-  const adminUser  = isAdmin();
   const totalIn    = records.filter(r => r.type === "IN").length;
   const totalOut   = records.filter(r => r.type === "OUT").length;
   const hasFilters = filterType !== "All" || filterProject !== "All" || filterDate !== "";
@@ -506,7 +514,7 @@ export default function Records() {
         <RecordModal
           mode={modal.mode} record={modal.record} projects={projects}
           members={members || []} departments={departments}
-          teamId={userProfile.teamId} userProfile={userProfile}
+          teamId={teamId} userProfile={userProfile} performer={performer} isGuestView={isGuestView}
           onClose={() => setModal(null)} onSaved={() => {}}
         />
       )}

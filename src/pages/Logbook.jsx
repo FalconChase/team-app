@@ -247,11 +247,13 @@ function ActivitiesOverview({ selectedProject, viewYear, viewMonth, dayData, dat
 
 export default function Logbook() {
   const { userProfile } = useAuth();
-  useTeam();
+  const { viewingTeamId, isGuestView, guestPermissions } = useTeam();
 
   const [searchParams] = useSearchParams();
-  const teamId    = userProfile?.teamId;
-  const canEdit   = ["admin","owner","manager","supervisor"].includes(userProfile?.role);
+  const teamId  = viewingTeamId || userProfile?.teamId;
+  const canEdit = isGuestView
+    ? (guestPermissions?.canEdit && (guestPermissions?.editableTabs || []).includes("logbook"))
+    : ["admin","owner","manager","supervisor"].includes(userProfile?.role);
 
   const today      = new Date();
   const todayYear  = today.getFullYear();

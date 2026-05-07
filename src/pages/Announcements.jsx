@@ -19,7 +19,8 @@ function linkify(text) {
 
 export default function Announcements() {
   const { userProfile } = useAuth();
-  const { isAdmin } = useTeam();
+  const { isAdmin, viewingTeamId, isGuestView } = useTeam();
+  const teamId = viewingTeamId || userProfile?.teamId;
   const [posts, setPosts] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,10 +29,10 @@ export default function Announcements() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = query(collection(db, "announcements"), where("teamId", "==", userProfile.teamId), orderBy("pinned", "desc"), orderBy("createdAt", "desc"));
+    if (!teamId) return;
+    const q = query(collection(db, "announcements"), where("teamId", "==", teamId), orderBy("pinned", "desc"), orderBy("createdAt", "desc"));
     return onSnapshot(q, snap => setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   function handleFileChange(e) {
     const f = e.target.files[0];
@@ -49,7 +50,7 @@ export default function Announcements() {
   }
 
   async function uploadFile(f) {
-    const path = `announcements/${userProfile.teamId}/${Date.now()}_${f.name}`;
+    const path = `announcements/${teamId}/${Date.now()}_${f.name}`;
     const storageRef = ref(storage, path);
     return new Promise((resolve, reject) => {
       const task = uploadBytesResumable(storageRef, f);
@@ -83,7 +84,7 @@ export default function Announcements() {
     const preview = text.trim().slice(0, 60) || (attachment ? `[attachment: ${attachment.name}]` : "");
 
     await addDoc(collection(db, "announcements"), {
-      text: text.trim(), teamId: userProfile.teamId,
+      text: text.trim(), teamId: teamId,
       authorId: userProfile.uid, authorName: userProfile.displayName,
       authorRole: userProfile.role, pinned: false,
       attachment: attachment || null,
@@ -92,7 +93,7 @@ export default function Announcements() {
 
     // ── LOG: announcement posted ─────────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Posted an announcement: "${preview}${preview.length >= 60 ? "…" : ""}"`,
       category:    "announcement",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -122,7 +123,7 @@ export default function Announcements() {
 
     // ── LOG: announcement deleted ────────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Deleted announcement: "${preview}${preview.length >= 60 ? "…" : ""}"`,
       category:    "announcement",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -160,7 +161,7 @@ export default function Announcements() {
         <div style={{ fontSize: "12px", color: "#888" }}>Anyone can post</div>
       </div>
 
-      <div style={s.composeBox}>
+      {!isGuestView && <div style={s.composeBox}>
         <textarea style={s.textarea} value={text} onChange={e => setText(e.target.value)} placeholder="Write an announcement for the whole team..." onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) post(); }} />
         {file && (
           <div style={s.filePreview}>
@@ -190,7 +191,7 @@ export default function Announcements() {
             <button style={s.postBtn} onClick={post} disabled={loading || uploading || (!text.trim() && !file)}>{loading ? "Posting..." : "Post Announcement"}</button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {posts.length === 0 && <div style={s.empty}>No announcements yet. Be the first to post!</div>}
 

@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
+import { useTeam } from "../contexts/TeamContext";
 // ── AUDIT LOG ──────────────────────────────────────────────────────────────────
 import { logAction } from "../utils/logAction";
 import styles from "./Projects.module.css";
@@ -49,9 +50,12 @@ function emptyForm() {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Projects() {
   const { userProfile } = useAuth();
+  const { viewingTeamId, isGuestView, guestPermissions } = useTeam();
   const navigate = useNavigate();
-  const canEdit = ["admin", "owner", "manager", "supervisor"].includes(userProfile?.role);
-  const teamId  = userProfile?.teamId;
+  const teamId  = viewingTeamId || userProfile?.teamId;
+  const canEdit = isGuestView
+    ? (guestPermissions?.canEdit && (guestPermissions?.editableTabs || []).includes("projects"))
+    : ["admin", "owner", "manager", "supervisor"].includes(userProfile?.role);
 
   const [projects,     setProjects]     = useState([]);
   const [loading,      setLoading]      = useState(true);

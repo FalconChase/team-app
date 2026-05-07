@@ -730,8 +730,12 @@ const BLANK_FORM = {
 };
 
 export default function Documents() {
-  const { userProfile }            = useAuth();
-  const { isAdmin, team, members } = useTeam();
+  const { userProfile }                                                    = useAuth();
+  const { isAdmin, team, members, viewingTeamId, isGuestView, guestPermissions } = useTeam();
+  const teamId  = viewingTeamId || userProfile?.teamId;
+  const canEdit = isGuestView
+    ? (guestPermissions?.canEdit && (guestPermissions?.editableTabs || []).includes("documents"))
+    : isAdmin();
   const location                   = useLocation();
 
   const [documents,    setDocuments]    = useState([]);
@@ -761,16 +765,16 @@ export default function Documents() {
   }, [team]);
 
   useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = query(collection(db, "papers"), where("teamId", "==", userProfile.teamId));
+    if (!teamId) return;
+    const q = query(collection(db, "papers"), where("teamId", "==", teamId));
     return onSnapshot(q, (snap) => setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !d.hidden)));
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   useEffect(() => {
-    if (!userProfile?.teamId) return;
-    const q = collection(db, "teams", userProfile.teamId, "projects");
+    if (!teamId) return;
+    const q = collection(db, "teams", teamId, "projects");
     return onSnapshot(q, (snap) => setProjects(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
-  }, [userProfile?.teamId]);
+  }, [teamId]);
 
   useEffect(() => {
     const targetId = pendingScrollId.current;
@@ -805,7 +809,7 @@ export default function Documents() {
     const defaultItems = (DEFAULT_LACKING_ITEMS[subjectType] || []).map((label, i) => ({ id: `default_${i}`, label, checked: false }));
     const dotsDetails  = form.dotsDate ? { "FOR_DoTS": { date: form.dotsDate, refNumber: "" } } : {};
     await addDoc(collection(db, "papers"), {
-      teamId: userProfile.teamId, projectId, subject, subjectType, status,
+      teamId: teamId, projectId, subject, subjectType, status,
       dotsDate: form.dotsDate || null, dotsTrackingId: form.dotsTrackingId || null,
       assignedTo: form.assignedTo || null,
       statusDetails: { LACKING: { items: defaultItems, customItems: [] }, ...dotsDetails },
@@ -818,7 +822,7 @@ export default function Documents() {
     // ── Audit log ──────────────────────────────────────────────────────────
     const subject2 = composeLabel(form.subjectType, form.subjectNum, form.rpdmRef);
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Added document: ${subject2}`,
       category:    "document",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -855,7 +859,7 @@ export default function Documents() {
     const filtered = existingCtes.filter((c) => c.fromDocId !== d.id);
     const newCtes  = [...filtered, newCteEntry];
 
-    await updateDoc(doc(db, "teams", userProfile.teamId, "projects", project.id), {
+    await updateDoc(doc(db, "teams", teamId, "projects", project.id), {
       ctes: newCtes,
     });
 
@@ -906,7 +910,7 @@ export default function Documents() {
 
     // ── Audit log ────────────────────────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Archived document: ${archiveTarget.subject}`,
       category:    "document",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -934,7 +938,7 @@ export default function Documents() {
     });
     // ── Audit log ────────────────────────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Changed document status to "${newStatus}"`,
       category:    "document",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -1021,7 +1025,7 @@ export default function Documents() {
     // ── Audit log ────────────────────────────────────────────────────────────
     const d = documents.find(doc => doc.id === docId);
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      assignee ? `Assigned document to ${assignee}` : "Unassigned document",
       category:    "document",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",
@@ -1039,7 +1043,7 @@ export default function Documents() {
 
     // ── Audit log ────────────────────────────────────────────────────────────
     logAction({
-      teamId:      userProfile.teamId,
+      teamId:      teamId,
       action:      `Deleted document: ${d?.subject || id}`,
       category:    "document",
       performedBy: userProfile.displayName || userProfile.email || "Unknown",

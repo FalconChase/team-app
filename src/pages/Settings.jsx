@@ -1118,6 +1118,316 @@ function LogbookReasonsSection({ teamId, userProfile }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 10 — Cross-Department Guest Access (admin)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const GRANTABLE_TABS = [
+  { id: "records",       label: "Records"       },
+  { id: "projects",      label: "Projects"      },
+  { id: "logbook",       label: "Logbook"       },
+  { id: "documents",     label: "Documents"     },
+  { id: "announcements", label: "Announcements" },
+];
+
+const DEFAULT_GUEST_PERMISSIONS = {
+  allowedTabs: ["records"],
+  allowedRecordTypes: null,
+  canEdit: false,
+  editableTabs: [],
+  editableRecordTypes: [],
+};
+
+function PermEditor({ value, onChange }) {
+  return (
+    <div>
+      <label style={S.label}>Allowed Tabs</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "14px" }}>
+        {GRANTABLE_TABS.map(tab => (
+          <label key={tab.id} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", cursor: "pointer", color: "var(--text-primary)" }}>
+            <input
+              type="checkbox"
+              checked={(value.allowedTabs || []).includes(tab.id)}
+              onChange={e => {
+                const tabs = value.allowedTabs || [];
+                onChange({
+                  ...value,
+                  allowedTabs: e.target.checked ? [...tabs, tab.id] : tabs.filter(t => t !== tab.id),
+                  editableTabs: e.target.checked ? (value.editableTabs || []) : (value.editableTabs || []).filter(t => t !== tab.id),
+                });
+              }}
+            />
+            {tab.label}
+          </label>
+        ))}
+      </div>
+
+      <label style={S.label}>Edit Access</label>
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", cursor: "pointer", color: "var(--text-primary)" }}>
+          <input type="radio" checked={!value.canEdit} onChange={() => onChange({ ...value, canEdit: false, editableTabs: [] })} />
+          Read-only (recommended)
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", cursor: "pointer", color: "var(--text-primary)" }}>
+          <input type="radio" checked={!!value.canEdit} onChange={() => onChange({ ...value, canEdit: true })} />
+          Allow editing on selected tabs
+        </label>
+      </div>
+
+      {value.canEdit && (value.allowedTabs || []).length > 0 && (
+        <div style={{ paddingLeft: "16px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
+          {(value.allowedTabs || []).map(tabId => {
+            const tab = GRANTABLE_TABS.find(t => t.id === tabId);
+            if (!tab) return null;
+            return (
+              <label key={tabId} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", cursor: "pointer", color: "var(--text-primary)" }}>
+                <input
+                  type="checkbox"
+                  checked={(value.editableTabs || []).includes(tabId)}
+                  onChange={e => {
+                    const editable = value.editableTabs || [];
+                    onChange({ ...value, editableTabs: e.target.checked ? [...editable, tabId] : editable.filter(t => t !== tabId) });
+                  }}
+                />
+                {tab.label}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GuestAccessSection({ team, teamId }) {
+  const { regenerateGuestInviteCode, revokeGuestAccess, updateGuestPermissions, updateTeamSettings } = useTeam();
+
+  const [guests,          setGuests]          = useState([]);
+  const [loadingGuests,   setLoadingGuests]   = useState(true);
+  const [regenerating,    setRegenerating]    = useState(false);
+  const [copied,          setCopied]          = useState(false);
+  const [showTemplate,    setShowTemplate]    = useState(false);
+  const [permDraft,       setPermDraft]       = useState(null);
+  const [savingTemplate,  setSavingTemplate]  = useState(false);
+  const [editingGuest,    setEditingGuest]    = useState(null);
+  const [guestDraft,      setGuestDraft]      = useState(null);
+  const [savingGuest,     setSavingGuest]     = useState(false);
+  const [revoking,        setRevoking]        = useState(null);
+
+  const guestInviteCode   = team?.guestInviteCode;
+  const currentTemplate   = team?.guestPermissions || DEFAULT_GUEST_PERMISSIONS;
+
+  useEffect(() => {
+    if (!teamId) return;
+    const q = query(collection(db, "teams", teamId, "guestAccess"), where("status", "==", "active"));
+    const unsub = onSnapshot(q, snap => {
+      setGuests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoadingGuests(false);
+    });
+    return unsub;
+  }, [teamId]);
+
+  async function handleRegenerate() {
+    setRegenerating(true);
+    try { await regenerateGuestInviteCode(); }
+    finally { setRegenerating(false); }
+  }
+
+  function handleCopy() {
+    navigator.clipboard?.writeText(guestInviteCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  async function handleSaveTemplate() {
+    setSavingTemplate(true);
+    try {
+      await updateTeamSettings({ guestPermissions: permDraft }, "Guest permission template updated");
+      setShowTemplate(false);
+    } finally { setSavingTemplate(false); }
+  }
+
+  async function handleSaveGuestPerms() {
+    setSavingGuest(true);
+    try {
+      await updateGuestPermissions(editingGuest.id, guestDraft);
+      setEditingGuest(null);
+    } finally { setSavingGuest(false); }
+  }
+
+  async function handleRevoke(guestId) {
+    setRevoking(guestId);
+    try { await revokeGuestAccess(guestId); }
+    finally { setRevoking(null); }
+  }
+
+  function formatDate(ts) {
+    if (!ts?.toDate) return "—";
+    return ts.toDate().toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  return (
+    <div style={S.section}>
+      <div style={S.sTitle}>🔗 Cross-Department Guest Access</div>
+      <div style={S.sDesc}>
+        Let users from other departments view curated data from your team. Share the guest invite code — access is instant with no admin approval needed.
+      </div>
+
+      {/* ── Guest Invite Code ─────────────────────────────────── */}
+      <label style={S.label}>Guest Invite Code</label>
+      {guestInviteCode ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+            <div style={{
+              fontFamily: "monospace", fontSize: "17px", fontWeight: "700",
+              letterSpacing: "3px", color: "var(--primary)",
+              background: "var(--primary-light)", borderRadius: "6px",
+              padding: "9px 14px", border: "1px solid var(--primary-border)", flex: 1,
+            }}>
+              {guestInviteCode}
+            </div>
+            <button style={S.btn(true, false, true)} onClick={handleCopy}>
+              {copied ? "✓ Copied" : "Copy"}
+            </button>
+            <button style={S.btn(false, true, true)} onClick={handleRegenerate} disabled={regenerating}>
+              {regenerating ? "…" : "Regenerate"}
+            </button>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "16px" }}>
+            Regenerating immediately voids the old code. Existing guest links are not affected.
+          </div>
+        </>
+      ) : (
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "10px" }}>
+            No guest invite code yet. Generate one to start inviting cross-department visitors.
+          </div>
+          <button style={S.btn(true)} onClick={handleRegenerate} disabled={regenerating}>
+            {regenerating ? "Generating…" : "Generate Guest Code"}
+          </button>
+        </div>
+      )}
+
+      <div style={S.divider} />
+
+      {/* ── Default Permission Template ───────────────────────── */}
+      <div style={{ marginBottom: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+          <div>
+            <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)" }}>Default Guest Permissions</div>
+            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" }}>
+              Applied to every new guest who links. Existing guests are not affected.
+            </div>
+          </div>
+          <button style={S.btn(false, false, true)} onClick={() => { setPermDraft({ ...currentTemplate }); setShowTemplate(v => !v); }}>
+            {showTemplate ? "Cancel" : "Edit Template"}
+          </button>
+        </div>
+
+        {!showTemplate && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {(currentTemplate.allowedTabs || []).map(t => (
+              <span key={t} style={S.pill("var(--primary)")}>{t}</span>
+            ))}
+            {!(currentTemplate.allowedTabs || []).length && (
+              <span style={{ fontSize: "11px", color: "var(--text-disabled)" }}>No tabs configured — edit template to set up.</span>
+            )}
+            <span style={S.pill(currentTemplate.canEdit ? "#059669" : "#6b7280")}>
+              {currentTemplate.canEdit ? "can edit" : "read-only"}
+            </span>
+          </div>
+        )}
+
+        {showTemplate && permDraft && (
+          <div style={{ background: "var(--bg-secondary)", borderRadius: "8px", padding: "14px 16px", border: "0.5px solid var(--border-main)" }}>
+            <PermEditor value={permDraft} onChange={setPermDraft} />
+            <div style={S.saveBar}>
+              <button style={S.btn(true)} onClick={handleSaveTemplate} disabled={savingTemplate}>
+                {savingTemplate ? "Saving…" : "Save Template"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={S.divider} />
+
+      {/* ── Active Guests List ────────────────────────────────── */}
+      <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "10px" }}>
+        Active Guests {!loadingGuests && `(${guests.length})`}
+      </div>
+
+      {loadingGuests ? (
+        <div style={{ fontSize: "12px", color: "var(--text-disabled)" }}>Loading…</div>
+      ) : guests.length === 0 ? (
+        <div style={{
+          fontSize: "12px", color: "var(--text-disabled)", textAlign: "center",
+          background: "var(--bg-secondary)", borderRadius: "6px",
+          padding: "16px", border: "0.5px solid var(--border-light)",
+        }}>
+          No guests linked yet. Share the guest invite code to get started.
+        </div>
+      ) : (
+        guests.map(g => (
+          <div key={g.id}>
+            <div style={S.memberRow}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={S.memberName}>{g.guestDisplayName}</div>
+                <div style={S.memberMeta}>
+                  {g.guestDepartment} · Linked {formatDate(g.linkedAt)}
+                  {g.isCustomized && <span style={{ ...S.pill("#7c3aed"), marginLeft: "6px" }}>custom permissions</span>}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "5px" }}>
+                  {(g.allowedTabs || []).map(t => <span key={t} style={S.pill("var(--primary)")}>{t}</span>)}
+                  <span style={S.pill(g.canEdit ? "#059669" : "#6b7280")}>
+                    {g.canEdit ? `can edit: ${(g.editableTabs || []).join(", ") || "none"}` : "read-only"}
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "10px" }}>
+                <button style={S.btn(false, false, true)} onClick={() => {
+                  if (editingGuest?.id === g.id) { setEditingGuest(null); return; }
+                  setEditingGuest(g);
+                  setGuestDraft({
+                    allowedTabs:        g.allowedTabs        || [],
+                    allowedRecordTypes: g.allowedRecordTypes || null,
+                    canEdit:            g.canEdit            || false,
+                    editableTabs:       g.editableTabs       || [],
+                    editableRecordTypes:g.editableRecordTypes|| [],
+                  });
+                }}>
+                  {editingGuest?.id === g.id ? "Cancel" : "Edit"}
+                </button>
+                <button style={S.btn(false, true, true)} onClick={() => handleRevoke(g.id)} disabled={revoking === g.id}>
+                  {revoking === g.id ? "…" : "Revoke"}
+                </button>
+              </div>
+            </div>
+
+            {editingGuest?.id === g.id && guestDraft && (
+              <div style={{
+                background: "var(--bg-secondary)", borderRadius: "8px",
+                padding: "14px 16px", margin: "6px 0 10px",
+                border: "0.5px solid var(--border-main)",
+              }}>
+                <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "10px" }}>
+                  Custom permissions for {g.guestDisplayName}
+                </div>
+                <PermEditor value={guestDraft} onChange={setGuestDraft} />
+                <div style={S.saveBar}>
+                  <button style={S.btn(true)} onClick={handleSaveGuestPerms} disabled={savingGuest}>
+                    {savingGuest ? "Saving…" : "Save Permissions"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 9 — Transfer Ownership (owner-only)
 // ═══════════════════════════════════════════════════════════════════════════════
 function TransferOwnershipSection({ members, currentUser, transferOwnership }) {
@@ -1324,6 +1634,8 @@ export function Settings() {
       />
 
       <LogbookReasonsSection teamId={userProfile?.teamId} userProfile={userProfile} />
+
+      <GuestAccessSection team={team} teamId={userProfile?.teamId} />
 
       {/* ADDED: Team Log — admin only, read only, bottom of settings */}
       <TeamLogSection teamId={userProfile?.teamId} />
